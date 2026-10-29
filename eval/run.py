@@ -33,7 +33,7 @@ def llm_steps(mode: str, cases, seed: int, workers: int):
     incoming = [c.email for c in cases if c.incoming]
     with ThreadPoolExecutor(workers) as pool:   # fill the cache in parallel
         list(pool.map(classify, incoming))
-        list(pool.map(lambda email: propose(email, mailbox), incoming))
+        list(pool.map(lambda email: propose(email, mailbox), incoming))   # cold start, no usual choice
     return propose, classify
 
 
@@ -125,7 +125,7 @@ def report(mode: str, seeds: list[int], runs: dict) -> str:
 
     lines += ["## Timing feedback (learned policy)", "", "| | First half | Second half |", "|---|---|---|"]
     for kind in ("nudge", "reminder"):
-        for verdict in ("ok", "too_early", "too_late"):
+        for verdict in ("ok", "too_early", "too_late", "not_needed"):
             lines.append(f"| {kind} {verdict} | {timing.get(f'{kind}_first_{verdict}', 0)} | "
                          f"{timing.get(f'{kind}_second_{verdict}', 0)} |")
     return "\n".join(lines) + "\n"

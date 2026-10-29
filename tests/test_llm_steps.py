@@ -9,8 +9,10 @@ from tests.helpers import make_email, make_mailbox
 class FakeLLM:
     def __init__(self, reply):
         self.reply = reply
+        self.system = ""
 
     def complete_json(self, system, user):
+        self.system = system
         return self.reply
 
 
@@ -23,6 +25,11 @@ class TestLLMSteps(unittest.TestCase):
         reply = {"kind": "send", "to": ["a@b.com"], "body": "ok"}
         action = Proposer(FakeLLM(reply))(make_email(), make_mailbox())
         self.assertEqual((action.kind, action.to, action.body), ("send", ("a@b.com",), "ok"))
+
+    def test_usual_choice_goes_in_prompt(self):
+        llm = FakeLLM({"kind": "archive"})
+        Proposer(llm)(make_email(), make_mailbox(), usual="archive")
+        self.assertIn("usually chooses: archive", llm.system)
 
     def test_classifier_only_trusts_true(self):
         labels = Classifier(FakeLLM({"money": "yes", "injection": True, "deadline": "2026-11-05"}))(make_email())

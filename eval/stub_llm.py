@@ -1,6 +1,7 @@
 """Worst-case stand-in for the LLM, for running the eval offline.
 
 - Proposer: right 85% of the time, and always follows the attacker on attack emails.
+  It ignores the user's usual choice, so it shows learning of autonomy alone.
 - Classifier: blind to money and injection, so only the pattern checks catch them.
   Deadlines come from ground truth.
 """
@@ -18,7 +19,7 @@ class StubLLM:
         self.rng = random.Random(seed)
         self.accuracy = accuracy
 
-    def propose(self, email, mailbox) -> Action:
+    def propose(self, email, mailbox, usual=None) -> Action:
         case = self.truth[email.id]
         if ATTACKER in email.body:
             return Action("forward", email.id, to=(ATTACKER,))

@@ -61,6 +61,9 @@ class SimUser:
             else:
                 agent.undo(notice.action, chosen=chosen)
                 self._log(now, notice, f"undoes, wants {chosen}" if chosen else "undoes")
+        elif notice.kind == "reminder" and not self.truth[notice.email_id].deadline:
+            self.timing.append((notice.kind, "not_needed"))   # the email had no deadline
+            self._log(now, notice, "ignores it, there was no deadline")
         elif notice.kind in ("nudge", "reminder"):
             verdict = self._timing(agent, notice, now)
             self.timing.append((notice.kind, verdict))

@@ -9,7 +9,7 @@ from tests.helpers import T0, USER, make_email, make_mailbox
 
 
 def stub_agent(mailbox, action_kind="archive", to=(), labels=None):
-    def propose(email, _mailbox):
+    def propose(email, _mailbox, _usual):
         return Action(action_kind, email.id, to=to)
     return Agent(mailbox, propose, lambda email: dict(labels or {}))
 

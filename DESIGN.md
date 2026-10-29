@@ -71,7 +71,7 @@ The agent uses a cautious estimate of the rate that rises as responses accumulat
 
 The rejection weight and thresholds are chosen by `eval/tune.py` on separate seeds from the reported results: the lowest ask rate with at most 5% wrong autonomous actions.
 
-Learning changes how much the agent does alone. The action the LLM suggests stays the same.
+The proposer is told which action the user has approved most for this sender, or for its category if the sender is new. Corrections therefore improve proposals as well as autonomy. The hint never affects checks 1 and 2.
 
 ## Eval
 

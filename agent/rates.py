@@ -1,6 +1,7 @@
 """Check 3: approval rates learned from user feedback."""
 import math
 from collections import defaultdict
+from typing import Optional
 
 from agent.models import Level
 
@@ -48,6 +49,14 @@ class ApprovalRates:
         weight = max(CATEGORY_WEIGHT - own_a - own_r, 0)
         scale = min(cat_n, weight) / cat_n if cat_n else 0
         return cautious_rate(own_a + cat_a * scale, own_r + cat_r * scale)
+
+    def usual_choice(self, sender: str, category: str) -> Optional[str]:
+        """The action the user has approved most for this sender, else for its category."""
+        for counts, key in ((self.by_sender, sender), (self.by_category, category)):
+            approvals = {kind: a for (kind, k), (a, _) in counts.items() if k == key and a > 0}
+            if approvals:
+                return max(approvals, key=approvals.get)
+        return None
 
     def level(self, kind: str, sender: str, category: str) -> Level:
         rate = self.rate(kind, sender, category)

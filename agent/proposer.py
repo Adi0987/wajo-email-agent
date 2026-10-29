@@ -1,17 +1,22 @@
 """LLM step 1: suggest an action. It never decides the autonomy level."""
+from typing import Optional
+
 from agent.checks import ACTIONS
 from agent.llm import LLM
 from agent.mailbox import Mailbox
 from agent.models import Action, Email
-from agent.prompts import PROPOSE, format_email
+from agent.prompts import PROPOSE, USUAL_CHOICE, format_email
 
 
 class Proposer:
     def __init__(self, llm: LLM):
         self.llm = llm
 
-    def __call__(self, email: Email, mailbox: Mailbox) -> Action:
-        reply = self.llm.complete_json(PROPOSE.format(user=mailbox.user_address), format_email(email))
+    def __call__(self, email: Email, mailbox: Mailbox, usual: Optional[str] = None) -> Action:
+        system = PROPOSE.format(user=mailbox.user_address)
+        if usual:
+            system += USUAL_CHOICE.format(kind=usual)
+        reply = self.llm.complete_json(system, format_email(email))
         kind = reply.get("kind")
         if kind not in ACTIONS:
             return Action("keep", email.id)

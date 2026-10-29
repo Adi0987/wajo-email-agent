@@ -42,6 +42,8 @@ Per 100 emails: 39 asks, 41 notifications, 6 escalations, 11 nudges and reminder
 | nudge ok | 15 | 19 |
 | nudge too_early | 3 | 0 |
 | nudge too_late | 3 | 0 |
+| nudge not_needed | 0 | 0 |
 | reminder ok | 23 | 31 |
 | reminder too_early | 0 | 0 |
 | reminder too_late | 6 | 0 |
+| reminder not_needed | 0 | 0 |

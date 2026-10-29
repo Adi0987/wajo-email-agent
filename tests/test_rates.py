@@ -47,6 +47,14 @@ class TestRates(unittest.TestCase):
         approve(rates, 10, sender="b@news.com")
         self.assertEqual(rates.level("archive", "b@news.com", "newsletter"), Level.SILENT)
 
+    def test_usual_choice(self):
+        rates = ApprovalRates()
+        self.assertIsNone(rates.usual_choice("a@news.com", "newsletter"))
+        approve(rates, 3)
+        rates.record("trash", "a@news.com", "newsletter", approved=True)
+        self.assertEqual(rates.usual_choice("a@news.com", "newsletter"), "archive")
+        self.assertEqual(rates.usual_choice("new@news.com", "newsletter"), "archive")
+
     def test_actions_learn_separately(self):
         rates = ApprovalRates()
         approve(rates, 15)
