@@ -2,7 +2,7 @@
 from agent.mailbox import Mailbox
 from agent.models import Email
 
-CATEGORIES = ("contact", "same_domain", "newsletter", "unknown")
+CATEGORIES = ("same_domain", "contact", "newsletter", "unknown")
 
 
 def domain_of(address: str) -> str:
@@ -14,11 +14,26 @@ def domain_of(address: str) -> str:
         return "invalid:" + domain
 
 
-def sender_category(email: Email, mailbox: Mailbox) -> str:
-    if email.authenticated and email.sender in mailbox.contacts():
-        return "contact"
-    if email.authenticated and domain_of(email.sender) == mailbox.user_domain:
+def category_of(address: str, authenticated: bool, has_unsubscribe: bool, mailbox: Mailbox) -> str:
+    if authenticated and domain_of(address) == mailbox.user_domain:
         return "same_domain"
-    if email.has_unsubscribe:
+    if authenticated and address in mailbox.contacts():
+        return "contact"
+    if has_unsubscribe:
         return "newsletter"
     return "unknown"
+
+
+def sender_category(email: Email, mailbox: Mailbox) -> str:
+    return category_of(email.sender, email.authenticated, email.has_unsubscribe, mailbox)
+
+
+def other_party(email: Email, mailbox: Mailbox) -> tuple[str, str]:
+    """(address, category) of the person on the other side of the email.
+
+    For the user's own sent mail, that is the first recipient.
+    """
+    if email.sender == mailbox.user_address:
+        address = email.to[0]
+        return address, category_of(address, True, False, mailbox)
+    return email.sender, sender_category(email, mailbox)

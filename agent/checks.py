@@ -7,6 +7,7 @@ from agent.models import Flags, Level
 
 # action: (leaves the mailbox, can't be undone)
 ACTIONS = {
+    "keep":        (False, False),   # leave it in the inbox
     "label":       (False, False),
     "archive":     (False, False),
     "mark_read":   (False, False),

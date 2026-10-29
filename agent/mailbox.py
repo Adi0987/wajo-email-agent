@@ -41,7 +41,9 @@ class Mailbox:
 
     def apply(self, action: Action, now: datetime) -> None:
         email = self.get(action.email_id)
-        if action.kind == "label":
+        if action.kind == "keep":
+            pass
+        elif action.kind == "label":
             self.labels[email.id].add(action.label)
         elif action.kind == "archive":
             self.archived.add(email.id)
@@ -67,7 +69,9 @@ class Mailbox:
 
     def undo(self, action: Action) -> None:
         email_id = action.email_id
-        if action.kind == "label":
+        if action.kind == "keep":
+            pass
+        elif action.kind == "label":
             self.labels[email_id].discard(action.label)
         elif action.kind == "archive":
             self.archived.discard(email_id)
