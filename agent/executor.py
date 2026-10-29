@@ -12,12 +12,13 @@ from agent.notices import Notice
 
 
 class Executor:
-    def __init__(self, mailbox: Mailbox, checks_for: Callable[[Action], dict[str, Level]]):
+    def __init__(self, mailbox: Mailbox, checks_for: Callable[[Action], dict[str, Level]],
+                 notices: list[Notice]):
         self.mailbox = mailbox
         self.checks_for = checks_for   # action -> {"action": Level, "email": Level, "learned": Level}
+        self.notices = notices         # owned by the agent; the executor adds notify, ask, escalate
         self.approvals = Approvals()
-        self.notices: list[Notice] = []
-        self.log: list[dict] = []   # every decision, read by the eval
+        self.log: list[dict] = []      # every decision, read by the eval
 
     def level_for(self, action: Action) -> tuple[Level, dict[str, Level]]:
         checks = self.checks_for(action)
@@ -37,13 +38,18 @@ class Executor:
         self._record(now, action, level, checks, executed=level >= Level.NOTIFY)
         return level
 
+    def approve(self, approval_id: str) -> None:
+        self.approvals.approve(approval_id)
+
+    def reject(self, approval_id: str) -> None:
+        self.approvals.reject(approval_id)
+
     def run_approved(self, approval_id: str, action: Action, now: datetime) -> bool:
         """Run an approved action if it is unchanged and still allowed."""
         level, checks = self.level_for(action)
-        allowed = self.approvals.matches(approval_id, action) and level >= Level.ASK
+        allowed = self.approvals.use(approval_id, action) and level >= Level.ASK
         if allowed:
             self.mailbox.apply(action, now)
-        self.approvals.approved.pop(approval_id, None)
         self._record(now, action, Level.ASK, checks, executed=allowed, approved=True)
         return allowed
 

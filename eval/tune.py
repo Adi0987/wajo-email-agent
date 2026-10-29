@@ -13,7 +13,7 @@ from agent.mailbox import Mailbox
 from agent.rates import ApprovalRates
 from eval import metrics
 from eval.inbox import USER, build_inbox
-from eval.run import llm_steps
+from eval.llm_steps import llm_steps
 from eval.simulate import simulate
 from eval.user import SimUser
 

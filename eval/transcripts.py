@@ -10,7 +10,7 @@ from agent.mailbox import Mailbox
 from agent.models import Level
 from eval.inbox import USER, build_inbox
 from eval.metrics import ATTACK_GROUPS
-from eval.run import llm_steps
+from eval.llm_steps import llm_steps
 from eval.simulate import simulate
 from eval.user import SimUser
 

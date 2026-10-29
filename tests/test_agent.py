@@ -48,7 +48,7 @@ class TestAgent(unittest.TestCase):
         agent = stub_agent(make_mailbox(sent), "send", to=("friend@gmail.com",))
         deliver(agent, make_email(id="e1", thread_id="s1"))
         notice = agent.notices[-1]
-        agent.executor.approvals.approve(notice.approval_id)
+        agent.executor.approve(notice.approval_id)
         changed = replace(notice.action, to=("friend@gmail.com", "x@evil.com"))
         self.assertFalse(agent.executor.run_approved(notice.approval_id, changed, T0))
 

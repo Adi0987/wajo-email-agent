@@ -28,10 +28,16 @@ DeepSeek responses are cached in `eval/llm_cache.json`, so the DeepSeek eval rer
 |---|---|
 | `agent/agent.py` | Background worker: queue in, decisions out, feedback back |
 | `agent/checks.py` | Checks 1 and 2: the safety floor |
-| `agent/rates.py` | Check 3: learned approval rates |
 | `agent/flags.py` | Money and injection flags: classifier OR patterns |
-| `agent/executor.py` | The only code that changes the mailbox |
+| `agent/rates.py` | Check 3: learned approval rates |
+| `agent/executor.py` | The only code that changes the mailbox; reruns the checks |
+| `agent/approvals.py` | Pending approvals, each bound to one exact action |
 | `agent/scheduler.py`, `agent/timing.py` | Follow-ups and deadline reminders, learned timing |
-| `agent/proposer.py`, `agent/classifier.py`, `agent/llm.py` | LLM steps |
 | `agent/senders.py` | Sender categories |
-| `eval/` | Synthetic inbox, simulated user, baselines, metrics, tuning |
+| `agent/proposer.py`, `agent/classifier.py`, `agent/prompts.py`, `agent/llm.py` | LLM steps |
+| `agent/mailbox.py`, `agent/models.py`, `agent/notices.py` | Mock mailbox and shared types |
+| `eval/inbox.py`, `eval/user.py` | Synthetic inbox with ground truth, simulated user |
+| `eval/simulate.py`, `eval/metrics.py`, `eval/report.py`, `eval/run.py` | Run the eval and report results |
+| `eval/baselines.py`, `eval/stub_llm.py`, `eval/llm_steps.py` | Baselines and LLM setup |
+| `eval/tune.py`, `eval/transcripts.py` | Tuning and example transcripts |
+| `tests/` | Unit tests |

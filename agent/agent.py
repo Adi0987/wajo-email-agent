@@ -28,13 +28,10 @@ class Agent:
         self.rates = rates or ApprovalRates()
         self.timing = Timing()
         self.scheduler = Scheduler(mailbox, self.timing)
-        self.executor = Executor(mailbox, self.checks_for)
+        self.notices: list[Notice] = []    # everything sent to the user, in order
+        self.executor = Executor(mailbox, self.checks_for, self.notices)
         self.labels: dict[str, dict] = {}
         self.queue: deque[Email] = deque()
-
-    @property
-    def notices(self) -> list[Notice]:
-        return self.executor.notices
 
     # --- background work ---
 
@@ -75,12 +72,12 @@ class Agent:
     # --- user feedback ---
 
     def approve(self, notice: Notice, now: datetime) -> bool:
-        self.executor.approvals.approve(notice.approval_id)
+        self.executor.approve(notice.approval_id)
         self._record(notice.action, approved=True)
         return self.executor.run_approved(notice.approval_id, notice.action, now)
 
     def reject(self, notice: Notice, chosen: Optional[str] = None) -> None:
-        self.executor.approvals.reject(notice.approval_id)
+        self.executor.reject(notice.approval_id)
         self._record(notice.action, approved=False, chosen=chosen)
 
     def confirm(self, notice: Notice) -> None:

@@ -5,12 +5,9 @@ from typing import Optional
 
 from agent.models import Action
 
-KINDS = ("notify", "ask", "escalate", "nudge", "reminder")
-
-
 @dataclass(frozen=True)
 class Notice:
-    kind: str
+    kind: str                         # notify, ask, escalate, nudge or reminder
     email_id: str
     at: datetime
     action: Optional[Action] = None

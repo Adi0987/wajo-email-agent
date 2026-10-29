@@ -23,9 +23,8 @@ def money_pattern(email: Email) -> bool:
 
 def recipient_outside(action: Action, mailbox: Mailbox) -> bool:
     """True if the action sends to anyone outside the thread and contacts."""
-    email = mailbox.get(action.email_id)
-    in_thread = {e.sender for e in mailbox.thread(email.thread_id)}
-    in_thread |= {a for e in mailbox.thread(email.thread_id) for a in e.to}
+    thread = mailbox.thread(mailbox.get(action.email_id).thread_id)
+    in_thread = {e.sender for e in thread} | {address for e in thread for address in e.to}
     allowed = in_thread | mailbox.contacts()
     return any(address not in allowed for address in action.to)
 

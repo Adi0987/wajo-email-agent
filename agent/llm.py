@@ -13,10 +13,6 @@ API_URL = "https://api.deepseek.com/chat/completions"
 MODEL = "deepseek-chat"
 
 
-class CacheMiss(Exception):
-    pass
-
-
 def load_env(path: str = ".env") -> None:
     if not Path(path).exists():
         return
@@ -27,17 +23,14 @@ def load_env(path: str = ".env") -> None:
 
 
 class LLM:
-    def __init__(self, cache_path: str = "eval/llm_cache.json", offline: bool = False):
+    def __init__(self, cache_path: str = "eval/llm_cache.json"):
         self.cache_path = Path(cache_path)
         self.cache = json.loads(self.cache_path.read_text()) if self.cache_path.exists() else {}
-        self.offline = offline   # True: only use cached responses
         self.lock = threading.Lock()
 
     def complete_json(self, system: str, user: str) -> dict:
         key = hashlib.sha256(f"{MODEL}\n{system}\n{user}".encode()).hexdigest()
         if key not in self.cache:
-            if self.offline:
-                raise CacheMiss(key)
             reply = self._call(system, user)
             with self.lock:
                 self.cache[key] = reply

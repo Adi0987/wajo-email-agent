@@ -2,9 +2,6 @@
 from agent.mailbox import Mailbox
 from agent.models import Email
 
-CATEGORIES = ("same_domain", "contact", "newsletter", "unknown")
-
-
 def domain_of(address: str) -> str:
     """Domain in ASCII form, so Unicode lookalikes don't match real domains."""
     domain = address.rsplit("@", 1)[-1]
@@ -15,6 +12,7 @@ def domain_of(address: str) -> str:
 
 
 def category_of(address: str, authenticated: bool, has_unsubscribe: bool, mailbox: Mailbox) -> str:
+    """same_domain, contact, newsletter or unknown."""
     if authenticated and domain_of(address) == mailbox.user_domain:
         return "same_domain"
     if authenticated and address in mailbox.contacts():

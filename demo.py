@@ -10,7 +10,7 @@ from agent.agent import Agent
 from agent.mailbox import Mailbox
 from agent.notices import Notice
 from eval.inbox import START, USER, build_inbox
-from eval.run import llm_steps
+from eval.llm_steps import llm_steps
 from eval.simulate import simulate
 
 

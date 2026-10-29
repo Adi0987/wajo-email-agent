@@ -15,14 +15,12 @@ class Approvals:
         self.pending[approval_id] = action
         return approval_id
 
-    def approve(self, approval_id: str) -> Action:
-        action = self.pending.pop(approval_id)
-        self.approved[approval_id] = action
-        return action
+    def approve(self, approval_id: str) -> None:
+        self.approved[approval_id] = self.pending.pop(approval_id)
 
-    def reject(self, approval_id: str) -> Action:
-        return self.pending.pop(approval_id)
+    def reject(self, approval_id: str) -> None:
+        self.pending.pop(approval_id)
 
-    def matches(self, approval_id: str, action: Action) -> bool:
-        """True only if this exact action was approved."""
-        return self.approved.get(approval_id) == action
+    def use(self, approval_id: str, action: Action) -> bool:
+        """True only if this exact action was approved. Each approval works once."""
+        return self.approved.pop(approval_id, None) == action
