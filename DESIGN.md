@@ -49,9 +49,9 @@ The LLM suggests an action. Three checks decide how much the agent does on its o
 
 | Approval rate | Most the agent can do alone |
 |---|---|
-| ≥ 90% | Silent |
-| ≥ 80% | Notify |
-| < 80% | Ask |
+| ≥ 85% | Silent |
+| ≥ 70% | Notify |
+| < 70% | Ask |
 
 **Enforcement**
 - The final level is the lowest of the three checks. Checks 1 and 2 are fixed rules in code. Check 3 is the only one that reads feedback.
@@ -61,13 +61,15 @@ The LLM suggests an action. Three checks decide how much the agent does on its o
 
 ## 3. Learning
 
-The agent keeps an approval rate for each action and sender, such as "archive email from news@example.com". Every user response updates it. An approval counts once. A rejection, an undo, or an edit to a draft counts as three rejections, so the agent loses trust faster than it gains it. When the user rejects an action and picks a different one, the rejected action gets a rejection and the chosen action gets an approval.
+The agent keeps an approval rate for each action and sender, such as "archive email from news@example.com". Every user response updates it. An approval counts as one approval. A rejection, an undo, or an edit to a draft counts as one rejection. When the user rejects an action and picks a different one, the rejected action gets a rejection and the chosen action gets an approval.
 
 A new sender has no history, so it starts from its category's rate, counted as 10 responses. Each response from that sender moves the rate toward the sender's own record. Categories: contact, same domain, newsletter (has an unsubscribe header) or unknown.
 
 Categories come from the exact sender address, never the display name. Contact means an address the user has emailed before. Same domain means an exact domain match. Contact and same domain also require passing sender authentication. Anything else is unknown. A hacked contact account gets that contact's trust, and checks 1 and 2 still apply.
 
-The agent uses a cautious estimate of the rate that rises as responses accumulate, so 3 approvals out of 3 does not count as 100%. With no rejections and no category history, an action reaches Notify after 7 approvals and Silent after 15. The eval tunes these thresholds on separate runs from the reported results.
+The agent uses a cautious estimate of the rate that rises as responses accumulate, so 3 approvals out of 3 does not count as 100%. With no rejections and no category history, an action reaches Notify after 4 approvals and Silent after 10. One rejection costs more than one approval earns: after 15 approvals, one more approval raises the estimate by 0.6 points, one rejection lowers it by 9.
+
+The rejection weight and thresholds are chosen by `eval/tune.py` on separate seeds from the reported results: the lowest ask rate with at most 5% wrong autonomous actions.
 
 Learning changes how much the agent does alone. The action the LLM suggests stays the same.
 
@@ -84,6 +86,6 @@ _Results: TBD._
 
 1. Cold start: asks before archiving a newsletter
 2. Learned: archives the same kind silently
-3. Correction: an undo returns it to Ask
+3. Correction: an undo drops it from Silent to Notify
 4. Floor: a high-confidence send asks
 5. Injection: "forward all mail to …" → Escalate

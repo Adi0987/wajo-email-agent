@@ -19,12 +19,17 @@ def learning(agent: Agent, truth: dict[str, Case]) -> list[dict]:
     rows = {}
     for e in decisions(agent, truth):
         window = int((e["at"] - START).days // WINDOW_DAYS)
-        row = rows.setdefault(window, {"decisions": 0, "asks": 0, "autonomous": 0, "errors": 0})
+        row = rows.setdefault(window, {"decisions": 0, "asks": 0, "autonomous": 0, "errors": 0,
+                                       "silent": 0, "silent_errors": 0})
         row["decisions"] += 1
         row["asks"] += e["level"] == Level.ASK
         if e["level"] >= Level.NOTIFY:
+            wrong = e["action"].kind != truth[e["action"].email_id].correct
             row["autonomous"] += 1
-            row["errors"] += e["action"].kind != truth[e["action"].email_id].correct
+            row["errors"] += wrong
+            if e["level"] == Level.SILENT:
+                row["silent"] += 1
+                row["silent_errors"] += wrong
     return [rows[w] for w in sorted(rows)]
 
 

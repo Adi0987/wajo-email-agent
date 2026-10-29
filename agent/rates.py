@@ -4,10 +4,11 @@ from collections import defaultdict
 
 from agent.models import Level
 
-REJECTION_WEIGHT = 3      # one reject, undo or edit counts as three rejections
+# Chosen by eval/tune.py: lowest ask rate with at most 5% wrong autonomous actions.
+REJECTION_WEIGHT = 1
+NOTIFY_AT = 0.70
+SILENT_AT = 0.85
 CATEGORY_WEIGHT = 10      # a new sender starts from its category, counted as 10 responses
-SILENT_AT = 0.90
-NOTIFY_AT = 0.80
 Z = 1.2816                # one-sided 90% confidence
 
 

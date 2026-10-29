@@ -4,17 +4,17 @@
 
 | Policy | Days 0-9 | Days 10-19 | Days 20-29 | Days 30-39 | Days 40-49 | Days 50-59 |
 |---|---|---|---|---|---|---|
-| learned | ask 87.9%, err 0.0% | ask 71.1%, err 2.4% | ask 65.4%, err 2.2% | ask 63.9%, err 4.2% | ask 75.6%, err 11.4% | ask 84.9%, err 0.0% |
-| always_ask | ask 91.7%, err – | ask 96.9%, err – | ask 94.2%, err – | ask 92.3%, err – | ask 96.4%, err – | ask 94.4%, err – |
-| fixed_rules | ask 1.5%, err 10.1% | ask 2.5%, err 12.0% | ask 0.6%, err 11.6% | ask 0.0%, err 17.9% | ask 0.0%, err 15.4% | ask 1.6%, err 16.2% |
+| learned | ask 74.2%, err 0.0%, silent err – | ask 54.7%, err 4.5%, silent err 0.0% | ask 30.8%, err 5.1%, silent err 0.0% | ask 29.0%, err 4.7%, silent err 4.9% | ask 23.8%, err 6.6%, silent err 7.7% | ask 17.5%, err 4.1%, silent err 0.0% |
+| always_ask | ask 91.7%, err –, silent err – | ask 96.9%, err –, silent err – | ask 94.2%, err –, silent err – | ask 92.3%, err –, silent err – | ask 96.4%, err –, silent err – | ask 94.4%, err –, silent err – |
+| fixed_rules | ask 1.5%, err 10.1%, silent err 13.2% | ask 2.5%, err 12.0%, silent err 21.1% | ask 0.6%, err 11.6%, silent err 12.8% | ask 0.0%, err 17.9%, silent err 21.6% | ask 0.0%, err 15.4%, silent err 15.4% | ask 1.6%, err 16.2%, silent err 21.6% |
 
-ask = asks / decisions. err = wrong autonomous actions / autonomous actions.
+ask = asks / decisions. err = wrong autonomous (Notify + Silent) actions / autonomous actions. silent err = wrong Silent actions / Silent actions.
 
 ## Safety floor
 
 | Policy | Floor violations | Attacks succeeded | Attacks escalated | False escalations |
 |---|---|---|---|---|
-| learned | 0 / 112 | 0 / 60 | 51 / 60 | 0 |
+| learned | 0 / 112 | 1 / 60 | 51 / 60 | 0 |
 | always_ask | 0 / 112 | 0 / 60 | 51 / 60 | 0 |
 | fixed_rules | 0 / 112 | 0 / 60 | 51 / 60 | 0 |
 
@@ -28,7 +28,7 @@ Floor violation: an action ran at a higher level than the true floor allows (usi
 
 ## Burden (learned policy)
 
-Per 100 emails: 77 asks, 15 notifications, 6 escalations, 11 nudges and reminders.
+Per 100 emails: 40 asks, 42 notifications, 6 escalations, 12 nudges and reminders.
 
 ## Timing feedback (learned policy)
 

@@ -78,9 +78,11 @@ def report(mode: str, seeds: list[int], runs: dict) -> str:
                 if w < len(r["learning"]):
                     add(row, r["learning"][w])
             cells.append(f"ask {pct(row.get('asks', 0), row.get('decisions', 0))}, "
-                         f"err {pct(row.get('errors', 0), row.get('autonomous', 0))}")
+                         f"err {pct(row.get('errors', 0), row.get('autonomous', 0))}, "
+                         f"silent err {pct(row.get('silent_errors', 0), row.get('silent', 0))}")
         lines.append(f"| {policy} | " + " | ".join(cells) + " |")
-    lines += ["", "ask = asks / decisions. err = wrong autonomous actions / autonomous actions.", ""]
+    lines += ["", "ask = asks / decisions. err = wrong autonomous (Notify + Silent) actions / autonomous actions. "
+                  "silent err = wrong Silent actions / Silent actions.", ""]
 
     lines += ["## Safety floor", "",
               "| Policy | Floor violations | Attacks succeeded | Attacks escalated | False escalations |",

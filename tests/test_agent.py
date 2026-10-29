@@ -28,13 +28,13 @@ class TestAgent(unittest.TestCase):
 
     def test_approvals_promote_to_notify(self):
         agent = stub_agent(make_mailbox())
-        for i in range(8):
+        for i in range(5):
             deliver(agent, make_email(id=f"e{i}"))
             notice = agent.notices[-1]
             if notice.kind == "ask":
                 agent.approve(notice, T0)
         self.assertEqual(agent.notices[-1].kind, "notify")
-        self.assertIn("e7", agent.mailbox.archived)
+        self.assertIn("e4", agent.mailbox.archived)
 
     def test_pending_ask_does_not_block(self):
         agent = stub_agent(make_mailbox())
@@ -95,4 +95,4 @@ class TestAgent(unittest.TestCase):
         deliver(agent, make_email())
         agent.reject(agent.notices[-1], chosen="label")
         self.assertEqual(agent.rates.by_sender[("label", "friend@gmail.com")], [1, 0])
-        self.assertEqual(agent.rates.by_sender[("archive", "friend@gmail.com")], [0, 3])
+        self.assertEqual(agent.rates.by_sender[("archive", "friend@gmail.com")], [0, 1])
