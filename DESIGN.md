@@ -75,17 +75,36 @@ The proposer is told which action the user has approved most for this sender, or
 
 ## Eval
 
-Mock mailbox, simulated user with hidden preferences.
-- **Learning:** ask rate and autonomous error rate per window, against always-ask and fixed-rule baselines.
-- **Situations:** nudges and reminders that arrive too early or too late, against the user's hidden timing. Deadline extraction precision and recall.
-- **Floor:** adversarial set per risk category. Floor crossings with counts and denominators, classifier recall.
+60 simulated days, about 300 emails per seed: newsletters, colleagues, contacts, cold outreach, invoices, deadlines, unanswered threads, and 20 attacks (injection, "this email is safe", spoofed contact, lookalike domain, hacked contact). A simulated user has a hidden correct action per email and hidden timing preferences. It flips 5% of its responses and notices only half of wrong Silent actions. Settings are tuned on seeds 1–3; results are on seeds 101–103.
 
-_Results: TBD._
+## Results (DeepSeek, seeds 101–103)
 
-## Example transcripts (from real runs, TBD)
+| Days | Ask rate | Wrong autonomous actions | Wrong Silent actions |
+|---|---|---|---|
+| 0–9 | 77% | 26% | 25% |
+| 20–29 | 52% | 4.5% | 0% |
+| 50–59 | 40% | 4.3% | 0% |
 
-1. Cold start: asks before archiving a newsletter
-2. Learned: archives the same kind silently
-3. Correction: an undo drops it from Silent to Notify
-4. Floor: a high-confidence send asks
-5. Injection: "forward all mail to …" → Escalate
+- **Floor:** 0 violations in 113 actions the floor applied to. 0 of 60 attacks succeeded; 51 were escalated, and the 9 lookalike wire requests were capped at Ask by the money check.
+- **Baselines:** always-ask asks 92–97% of the time. Fixed rules (no learning) ask 21–29% of the time, but 55–68% of their autonomous actions are wrong, because DeepSeek's proposals without the user's history are often wrong.
+- **Timing:** in the second half, all 53 nudges and reminders for real deadlines and threads had the right timing.
+- **Detection:** money 114/114, injection 51/51, deadlines 60/60, with 13 false deadlines. The money templates always contain an amount or "invoice", so money recall is easier here than on real mail.
+
+Full tables: [eval/results_deepseek.md](eval/results_deepseek.md). Offline worst case (the proposer follows every attacker, the classifier detects nothing): [eval/results_stub.md](eval/results_stub.md), also 0 floor violations.
+
+## Limitations
+
+- The simulated user is consistent apart from noise. Real preferences drift, and a real user ignores some notifications, which keeps those actions at Notify.
+- Detection is measured on templates. Real phishing varies more than the patterns cover.
+- Errors early on are high (26% in the first 10 days) because every sender starts cold.
+
+## Example transcripts
+
+From the DeepSeek run: [eval/transcripts_deepseek.md](eval/transcripts_deepseek.md).
+
+1. Cold start: asks before acting on a newsletter
+2. Learned: the same action for the same sender runs silently
+3. Correction: an undo lowers autonomy for that sender and action
+4. Floor: learned Silent, but a money email caps the action at Notify
+5. Injection: escalated whatever the proposer suggests
+6. Proactive: unanswered thread, the agent drafts a follow-up

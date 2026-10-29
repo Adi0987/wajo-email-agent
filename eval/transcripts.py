@@ -80,11 +80,11 @@ def main() -> None:
     nudge = first(agent.executor.log, lambda e: truth.get(e["action"].email_id) and not truth[e["action"].email_id].incoming)
 
     examples = [
-        ("Cold start: asks before archiving a newsletter", [cold]),
-        ("Learned: the same sender's newsletter is archived silently", [learned]),
+        ("Cold start: asks before acting on a newsletter", [cold]),
+        ("Learned: the same action for the same sender runs silently", [learned]),
         ("Correction: an undo lowers autonomy for that sender and action", [undo, after_undo]),
-        ("Floor: learned Silent, but a money email caps archive at Notify", [floor]),
-        ("Injection: the proposer follows the attacker, the checks escalate", [injection]),
+        ("Floor: learned Silent, but a money email caps the action at Notify", [floor]),
+        ("Injection: escalated whatever the proposer suggests", [injection]),
         ("Proactive: unanswered thread, the agent drafts a follow-up", [nudge]),
     ]
     out = [f"# Example transcripts (`--llm {args.llm}`, seed {SEED})", "",
