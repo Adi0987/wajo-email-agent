@@ -23,7 +23,7 @@ class TestRates(unittest.TestCase):
         self.assertEqual(rates.level("archive", "a@news.com", "newsletter"), Level.SILENT)
 
     def test_one_undo_drops_silent_to_notify(self):
-        rates = ApprovalRates()
+        rates = ApprovalRates(rejection_weight=1, notify_at=0.60, silent_at=0.85)
         approve(rates, 15)
         rates.record("archive", "a@news.com", "newsletter", approved=False)
         self.assertEqual(rates.level("archive", "a@news.com", "newsletter"), Level.NOTIFY)

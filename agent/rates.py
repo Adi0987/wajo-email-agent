@@ -6,9 +6,9 @@ from typing import Optional
 from agent.models import Level
 
 # Chosen by eval/tune.py: lowest ask rate with at most 5% wrong autonomous actions.
-REJECTION_WEIGHT = 2
+REJECTION_WEIGHT = 1
 NOTIFY_AT = 0.60
-SILENT_AT = 0.85
+SILENT_AT = 0.80
 CATEGORY_WEIGHT = 10      # a new sender starts from its category, counted as 10 responses,
                           # minus one for each of the sender's own responses
 Z = 1.2816                # one-sided 90% confidence
