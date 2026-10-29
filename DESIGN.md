@@ -67,7 +67,7 @@ A new sender has no history, so it starts from its category's rate, counted as 1
 
 Categories come from the exact sender address, never the display name. Contact means an address the user has emailed before. Same domain means an exact domain match. Contact and same domain also require passing sender authentication. Anything else is unknown. A hacked contact account gets that contact's trust, and checks 1 and 2 still apply.
 
-The agent uses a cautious estimate of the rate that rises as responses accumulate, so 3 approvals out of 3 does not count as 100%. With no rejections and no category history, an action reaches Notify after 10 approvals and Silent after 21. The eval tunes these thresholds on separate runs from the reported results.
+The agent uses a cautious estimate of the rate that rises as responses accumulate, so 3 approvals out of 3 does not count as 100%. With no rejections and no category history, an action reaches Notify after 7 approvals and Silent after 15. The eval tunes these thresholds on separate runs from the reported results.
 
 Learning changes how much the agent does alone. The action the LLM suggests stays the same.
 
