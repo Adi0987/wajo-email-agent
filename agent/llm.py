@@ -5,6 +5,7 @@ Cached responses make eval runs repeatable and free after the first run.
 import hashlib
 import json
 import os
+import threading
 import urllib.request
 from pathlib import Path
 
@@ -30,14 +31,17 @@ class LLM:
         self.cache_path = Path(cache_path)
         self.cache = json.loads(self.cache_path.read_text()) if self.cache_path.exists() else {}
         self.offline = offline   # True: only use cached responses
+        self.lock = threading.Lock()
 
     def complete_json(self, system: str, user: str) -> dict:
         key = hashlib.sha256(f"{MODEL}\n{system}\n{user}".encode()).hexdigest()
         if key not in self.cache:
             if self.offline:
                 raise CacheMiss(key)
-            self.cache[key] = self._call(system, user)
-            self.cache_path.write_text(json.dumps(self.cache, indent=1, sort_keys=True))
+            reply = self._call(system, user)
+            with self.lock:
+                self.cache[key] = reply
+                self.cache_path.write_text(json.dumps(self.cache, indent=1, sort_keys=True))
         return self.cache[key]
 
     def _call(self, system: str, user: str) -> dict:

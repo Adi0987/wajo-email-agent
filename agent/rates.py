@@ -23,13 +23,17 @@ def cautious_rate(approvals: float, rejections: float) -> float:
 
 
 class ApprovalRates:
-    def __init__(self):
+    def __init__(self, rejection_weight: float = REJECTION_WEIGHT,
+                 notify_at: float = NOTIFY_AT, silent_at: float = SILENT_AT):
+        self.rejection_weight = rejection_weight
+        self.notify_at = notify_at
+        self.silent_at = silent_at
         # (action, sender) and (action, category) -> [approvals, rejections]
         self.by_sender = defaultdict(lambda: [0.0, 0.0])
         self.by_category = defaultdict(lambda: [0.0, 0.0])
 
     def record(self, kind: str, sender: str, category: str, approved: bool) -> None:
-        index, amount = (0, 1) if approved else (1, REJECTION_WEIGHT)
+        index, amount = (0, 1) if approved else (1, self.rejection_weight)
         self.by_sender[(kind, sender)][index] += amount
         self.by_category[(kind, category)][index] += amount
 
@@ -44,8 +48,8 @@ class ApprovalRates:
 
     def level(self, kind: str, sender: str, category: str) -> Level:
         rate = self.rate(kind, sender, category)
-        if rate >= SILENT_AT:
+        if rate >= self.silent_at:
             return Level.SILENT
-        if rate >= NOTIFY_AT:
+        if rate >= self.notify_at:
             return Level.NOTIFY
         return Level.ASK

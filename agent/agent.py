@@ -20,11 +20,12 @@ FOLLOW_UP_BODY = "Just following up on my last email."
 class Agent:
     def __init__(self, mailbox: Mailbox,
                  propose: Callable[[Email, Mailbox], Action],
-                 classify: Callable[[Email], dict]):
+                 classify: Callable[[Email], dict],
+                 rates: Optional[ApprovalRates] = None):
         self.mailbox = mailbox
         self.propose = propose      # LLM: suggests an action
         self.classify = classify    # LLM: money, injection, deadline labels
-        self.rates = ApprovalRates()
+        self.rates = rates or ApprovalRates()
         self.timing = Timing()
         self.scheduler = Scheduler(mailbox, self.timing)
         self.executor = Executor(mailbox, self.level_for)
