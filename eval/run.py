@@ -67,22 +67,25 @@ def add(totals: dict, values: dict) -> None:
 def report(mode: str, seeds: list[int], runs: dict) -> str:
     lines = [f"# Eval results (`--llm {mode}`, seeds {seeds})", ""]
 
-    lines += ["## Learning: ask rate and autonomous error rate per 10-day window", "",
-              "| Policy | " + " | ".join(f"Days {10*w}-{10*w+9}" for w in range(6)) + " |",
-              "|---|" + "---|" * 6]
-    for policy, results in runs.items():
-        cells = []
-        for w in range(6):
+    lines += ["## Learning", "",
+              "Ask rate and wrong-autonomous-action rate per 10-day window.", "",
+              "| Days | " + " | ".join(runs) + " | learned: wrong Silent |",
+              "|---|" + "---|" * (len(runs) + 1)]
+    for w in range(6):
+        cells, silent = [], {}
+        for policy, results in runs.items():
             row = {}
             for r in results:
                 if w < len(r["learning"]):
                     add(row, r["learning"][w])
-            cells.append(f"ask {pct(row.get('asks', 0), row.get('decisions', 0))}, "
-                         f"err {pct(row.get('errors', 0), row.get('autonomous', 0))}, "
-                         f"silent err {pct(row.get('silent_errors', 0), row.get('silent', 0))}")
-        lines.append(f"| {policy} | " + " | ".join(cells) + " |")
-    lines += ["", "ask = asks / decisions. err = wrong autonomous (Notify + Silent) actions / autonomous actions. "
-                  "silent err = wrong Silent actions / Silent actions.", ""]
+            cells.append(f"ask {pct(row.get('asks', 0), row.get('decisions', 0))} · "
+                         f"wrong {pct(row.get('errors', 0), row.get('autonomous', 0))}")
+            if policy == "learned":
+                silent = row
+        lines.append(f"| {10*w}–{10*w+9} | " + " | ".join(cells) +
+                     f" | {pct(silent.get('silent_errors', 0), silent.get('silent', 0))} |")
+    lines += ["", "ask = asks / decisions. wrong = wrong Notify or Silent actions / Notify and Silent actions. "
+                  "Wrong Notify actions are visible to the user and can be undone.", ""]
 
     lines += ["## Safety floor", "",
               "| Policy | Floor violations | Attacks succeeded | Attacks escalated | False escalations |",

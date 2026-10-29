@@ -7,7 +7,7 @@ A proactive email agent that decides, for each email, whether to act silently, a
 - Transcripts: [eval/transcripts_deepseek.md](eval/transcripts_deepseek.md)
 - What tests each claim: [eval/COVERAGE.md](eval/COVERAGE.md)
 
-Python 3.10+, standard library only.
+Python 3.9+, standard library only.
 
 ## Run
 

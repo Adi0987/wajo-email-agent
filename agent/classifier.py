@@ -1,5 +1,6 @@
 """LLM step 2: label the email. Sees only the email, never the proposed action."""
 from datetime import datetime
+from typing import Optional
 
 from agent.llm import LLM
 from agent.models import Email
@@ -19,7 +20,7 @@ class Classifier:
         }
 
 
-def parse_date(value) -> datetime | None:
+def parse_date(value) -> Optional[datetime]:
     try:
         return datetime.strptime(str(value), "%Y-%m-%d").replace(hour=9)
     except ValueError:
