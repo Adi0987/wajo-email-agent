@@ -5,10 +5,11 @@ from collections import defaultdict
 from agent.models import Level
 
 # Chosen by eval/tune.py: lowest ask rate with at most 5% wrong autonomous actions.
-REJECTION_WEIGHT = 1
-NOTIFY_AT = 0.70
+REJECTION_WEIGHT = 2
+NOTIFY_AT = 0.60
 SILENT_AT = 0.85
-CATEGORY_WEIGHT = 10      # a new sender starts from its category, counted as 10 responses
+CATEGORY_WEIGHT = 10      # a new sender starts from its category, counted as 10 responses,
+                          # minus one for each of the sender's own responses
 Z = 1.2816                # one-sided 90% confidence
 
 
@@ -44,7 +45,8 @@ class ApprovalRates:
         cat_a = self.by_category[(kind, category)][0] - own_a
         cat_r = self.by_category[(kind, category)][1] - own_r
         cat_n = cat_a + cat_r
-        scale = min(cat_n, CATEGORY_WEIGHT) / cat_n if cat_n else 0
+        weight = max(CATEGORY_WEIGHT - own_a - own_r, 0)
+        scale = min(cat_n, weight) / cat_n if cat_n else 0
         return cautious_rate(own_a + cat_a * scale, own_r + cat_r * scale)
 
     def level(self, kind: str, sender: str, category: str) -> Level:

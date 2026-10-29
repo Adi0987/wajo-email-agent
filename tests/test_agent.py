@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from agent.agent import Agent
 from agent.models import Action, Level
+from agent.rates import REJECTION_WEIGHT
 from tests.helpers import T0, USER, make_email, make_mailbox
 
 
@@ -95,4 +96,4 @@ class TestAgent(unittest.TestCase):
         deliver(agent, make_email())
         agent.reject(agent.notices[-1], chosen="label")
         self.assertEqual(agent.rates.by_sender[("label", "friend@gmail.com")], [1, 0])
-        self.assertEqual(agent.rates.by_sender[("archive", "friend@gmail.com")], [0, 1])
+        self.assertEqual(agent.rates.by_sender[("archive", "friend@gmail.com")], [0, REJECTION_WEIGHT])

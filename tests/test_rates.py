@@ -14,12 +14,12 @@ class TestRates(unittest.TestCase):
         self.assertEqual(ApprovalRates().level("archive", "a@news.com", "newsletter"), Level.ASK)
 
     def test_promotion_thresholds(self):
-        rates = ApprovalRates()
-        approve(rates, 3)
+        rates = ApprovalRates(notify_at=0.60, silent_at=0.85)
+        approve(rates, 2)
         self.assertEqual(rates.level("archive", "a@news.com", "newsletter"), Level.ASK)
         approve(rates, 1)
         self.assertEqual(rates.level("archive", "a@news.com", "newsletter"), Level.NOTIFY)
-        approve(rates, 6)
+        approve(rates, 7)
         self.assertEqual(rates.level("archive", "a@news.com", "newsletter"), Level.SILENT)
 
     def test_one_undo_drops_silent_to_notify(self):
@@ -38,7 +38,14 @@ class TestRates(unittest.TestCase):
         approve(rates, 15)
         before = rates.rate("archive", "b@news.com", "newsletter")
         approve(rates, 5, sender="b@news.com")
-        self.assertGreater(rates.rate("archive", "b@news.com", "newsletter"), before)
+        self.assertGreaterEqual(rates.rate("archive", "b@news.com", "newsletter"), before)
+
+    def test_own_history_replaces_category(self):
+        rates = ApprovalRates()
+        for _ in range(10):
+            rates.record("archive", "a@news.com", "newsletter", approved=False)
+        approve(rates, 10, sender="b@news.com")
+        self.assertEqual(rates.level("archive", "b@news.com", "newsletter"), Level.SILENT)
 
     def test_actions_learn_separately(self):
         rates = ApprovalRates()

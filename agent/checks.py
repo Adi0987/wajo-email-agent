@@ -1,7 +1,6 @@
-"""The three checks. The final level is the most cautious of them.
+"""Checks 1 and 2: the safety floor. Fixed rules, no learned state.
 
-Checks 1 and 2 are the safety floor: fixed rules, no learned state.
-Check 3 (learned) comes from agent.rates.
+Check 3 (learned) is in agent.rates. The executor takes the most cautious of the three.
 """
 from agent.models import Flags, Level
 
@@ -39,6 +38,3 @@ def email_check(kind: str, flags: Flags) -> Level:
         return Level.ASK if is_external(kind) else Level.NOTIFY
     return Level.SILENT
 
-
-def final_level(kind: str, flags: Flags, learned: Level) -> Level:
-    return min(action_check(kind), email_check(kind, flags), learned)

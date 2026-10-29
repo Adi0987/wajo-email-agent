@@ -1,9 +1,13 @@
 import unittest
 
-from agent.checks import ACTIONS, final_level
+from agent.checks import ACTIONS, action_check, email_check
 from agent.models import Flags, Level
 
 NO_FLAGS = Flags()
+
+
+def final_level(kind, flags, learned):
+    return min(action_check(kind), email_check(kind, flags), learned)
 EXTERNAL = ["send", "forward", "unsubscribe"]
 INTERNAL = [kind for kind in ACTIONS if kind not in EXTERNAL]
 

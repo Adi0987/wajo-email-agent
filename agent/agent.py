@@ -3,7 +3,7 @@ from collections import deque
 from datetime import datetime
 from typing import Callable, Optional
 
-from agent.checks import final_level
+from agent.checks import action_check, email_check
 from agent.executor import Executor
 from agent.flags import detect_flags
 from agent.mailbox import Mailbox
@@ -28,7 +28,7 @@ class Agent:
         self.rates = rates or ApprovalRates()
         self.timing = Timing()
         self.scheduler = Scheduler(mailbox, self.timing)
-        self.executor = Executor(mailbox, self.level_for)
+        self.executor = Executor(mailbox, self.checks_for)
         self.labels: dict[str, dict] = {}
         self.queue: deque[Email] = deque()
 
@@ -60,12 +60,15 @@ class Agent:
 
     # --- the three checks ---
 
-    def level_for(self, action: Action) -> Level:
+    def checks_for(self, action: Action) -> dict[str, Level]:
         email = self.mailbox.get(action.email_id)
         sender, category = other_party(email, self.mailbox)
         flags = detect_flags(email, action, self.labels.get(email.id, {}), self.mailbox)
-        learned = self.rates.level(action.kind, sender, category)
-        return final_level(action.kind, flags, learned)
+        return {
+            "action": action_check(action.kind),
+            "email": email_check(action.kind, flags),
+            "learned": self.rates.level(action.kind, sender, category),
+        }
 
     # --- user feedback ---
 
