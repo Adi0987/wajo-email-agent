@@ -2,7 +2,7 @@
 Uses DeepSeek (LLM_API_KEY in .env).
 
     python3 run_agent.py
-    python3 run_agent.py --enron maildir --person kaminski-v --count 30
+    python3 run_agent.py --enron enron-email-dataset.zip --person kaminski-v --count 30
 
 At the "From" prompt you can also type:
     wait <days>   move the clock forward (follow-ups and deadline reminders fire)
@@ -138,7 +138,7 @@ class Session:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--enron", help="path to the Enron maildir folder")
+    parser.add_argument("--enron", help="Enron dataset: the Kaggle zip or the CMU maildir folder")
     parser.add_argument("--person", default="kaminski-v", help="whose inbox to use, e.g. kaminski-v")
     parser.add_argument("--count", type=int, default=30)
     args = parser.parse_args()

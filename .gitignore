@@ -5,3 +5,5 @@ __pycache__/
 maildir/
 enron_mail_*.tar.gz
 runs/
+enron-email-dataset.zip
+emails.csv

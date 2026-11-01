@@ -20,11 +20,13 @@ python3 -m eval.transcripts --llm deepseek    # write example transcripts
 python3 run_agent.py                          # type your own emails and answer the agent (DeepSeek)
 ```
 
-To try the agent on a real inbox, download the [Enron dataset](https://www.cs.cmu.edu/~enron/), extract it here (it creates `maildir/`, which git ignores), then:
+To try the agent on a real inbox, put the [Enron dataset](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset) zip here (git ignores it), then:
 
 ```
-python3 run_agent.py --enron maildir --person kaminski-v --count 30
+python3 run_agent.py --enron enron-email-dataset.zip --person kaminski-v --count 30
 ```
+
+The CMU `maildir/` folder works too: `--enron maildir`.
 
 It acts as that person: their sent mail becomes history (contacts), and a random sample of their inbox arrives one email at a time.
 
