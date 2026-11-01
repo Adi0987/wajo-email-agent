@@ -20,6 +20,14 @@ python3 -m eval.transcripts --llm deepseek    # write example transcripts
 python3 run_agent.py                          # type your own emails and answer the agent (DeepSeek)
 ```
 
+To try the agent on a real inbox, download the [Enron dataset](https://www.cs.cmu.edu/~enron/), extract it here (it creates `maildir/`, which git ignores), then:
+
+```
+python3 run_agent.py --enron maildir --person kaminski-v --count 30
+```
+
+It acts as that person: their sent mail becomes history (contacts), and a random sample of their inbox arrives one email at a time.
+
 DeepSeek responses are cached in `eval/llm_cache.json`, so the DeepSeek eval reruns without an API key.
 
 ## Layout
