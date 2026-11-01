@@ -17,7 +17,7 @@ python3 -m eval.run --llm stub                # eval offline, worst-case stand-i
 python3 -m eval.run --llm deepseek            # eval with DeepSeek (LLM_API_KEY in .env)
 python3 -m eval.tune --llm deepseek           # pick rate settings on tuning seeds
 python3 -m eval.transcripts --llm deepseek    # write example transcripts
-python3 demo.py --days 5                      # answer the agent's questions yourself
+python3 run_agent.py                          # type your own emails and answer the agent (DeepSeek)
 ```
 
 DeepSeek responses are cached in `eval/llm_cache.json`, so the DeepSeek eval reruns without an API key.

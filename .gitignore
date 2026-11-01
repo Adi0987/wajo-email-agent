@@ -1,3 +1,4 @@
 .env
 __pycache__/
 .venv/
+.llm_cache_local.json
