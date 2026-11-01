@@ -28,6 +28,8 @@ python3 run_agent.py --enron maildir --person kaminski-v --count 30
 
 It acts as that person: their sent mail becomes history (contacts), and a random sample of their inbox arrives one email at a time.
 
+Every decision and your response are saved to `runs/audit_<time>.csv` (one row per decision: proposal, each check's result, final level, classifier flags, your response). A summary prints when the session ends.
+
 DeepSeek responses are cached in `eval/llm_cache.json`, so the DeepSeek eval reruns without an API key.
 
 ## Layout
@@ -44,6 +46,7 @@ DeepSeek responses are cached in `eval/llm_cache.json`, so the DeepSeek eval rer
 | `agent/senders.py` | Sender categories |
 | `agent/proposer.py`, `agent/classifier.py`, `agent/prompts.py`, `agent/llm.py` | LLM steps |
 | `agent/mailbox.py`, `agent/models.py`, `agent/notices.py` | Mock mailbox and shared types |
+| `agent/audit.py` | Audit log of decisions and responses for `run_agent.py` |
 | `eval/inbox.py`, `eval/user.py` | Synthetic inbox with ground truth, simulated user |
 | `eval/simulate.py`, `eval/metrics.py`, `eval/report.py`, `eval/run.py` | Run the eval and report results |
 | `eval/baselines.py`, `eval/stub_llm.py`, `eval/llm_steps.py` | Baselines and LLM setup |

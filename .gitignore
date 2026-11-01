@@ -4,3 +4,4 @@ __pycache__/
 .llm_cache_local.json
 maildir/
 enron_mail_*.tar.gz
+runs/

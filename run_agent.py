@@ -14,12 +14,14 @@ import argparse
 from datetime import datetime, timedelta
 
 from agent.agent import Agent
+from agent.audit import AuditLog
 from agent.classifier import Classifier
 from agent.llm import LLM
 from agent.mailbox import Mailbox
 from agent.models import Email, Level
 from agent.notices import Notice
 from agent.proposer import Proposer
+from agent.senders import other_party
 from eval import enron
 
 USER = "me@wajo.ai"
@@ -33,6 +35,7 @@ class Session:
         self.now = feed[0].sent_at if feed else datetime.now().replace(second=0, microsecond=0)
         self.notices_seen = 0
         self.log_seen = 0
+        self.audit = AuditLog(f"runs/audit_{datetime.now():%Y%m%d_%H%M%S}.csv")
 
     def run(self) -> None:
         print(__doc__)
@@ -40,11 +43,11 @@ class Session:
         while True:
             if replay and not self.feed:
                 print("\nNo more emails.")
-                return
+                break
             line = input(f"\n[enter] next email ({len(self.feed)} left), wait <days>, quit: " if replay
                          else "\nFrom: ").strip().lower()
             if line == "quit":
-                return
+                break
             if line.startswith("wait"):
                 self.now += timedelta(days=float(line.split()[1]))
                 print(f"  Clock is now {self.now:%b %d %H:%M}")
@@ -55,6 +58,7 @@ class Session:
             self.agent.tick(self.now)
             self.show_decisions()
             self.answer_notices()
+        print("\n" + self.audit.summary())
 
     def deliver(self, email: Email) -> None:
         self.now = max(self.now, email.sent_at)
@@ -91,6 +95,8 @@ class Session:
                       f"learned {checks['learned'].name} → {entry['level'].name}")
                 if entry["level"] == Level.SILENT:
                     print(f"  Done silently: {action.kind}")
+                email = self.agent.mailbox.get(action.email_id)
+                self.audit.decision(entry, email, other_party(email, self.agent.mailbox)[1], labels)
         self.log_seen = len(self.agent.executor.log)
 
     def answer_notices(self) -> None:
@@ -106,18 +112,27 @@ class Session:
             answer = input(f"  ASK: {notice.action.kind}? [y]es / [n]o / or type the action you want: ").strip()
             if answer in ("", "y", "yes"):
                 agent.approve(notice, self.now)
+                response = "approved"
             else:
-                agent.reject(notice, chosen=None if answer in ("n", "no") else answer)
+                chosen = None if answer in ("n", "no") else answer
+                agent.reject(notice, chosen=chosen)
+                response = f"rejected, wanted {chosen}" if chosen else "rejected"
         elif notice.kind == "notify":
             if input(f"  NOTIFY: did {notice.action.kind}. [enter] ok / [u]ndo: ").strip() == "u":
                 agent.undo(notice.action)
+                response = "undone"
             else:
                 agent.confirm(notice)
+                response = "confirmed"
         elif notice.kind == "escalate":
             print("  ESCALATE: suspected injection or phishing. No action taken.")
+            response = "escalated"
         else:
-            verdict = input(f"  {notice.kind.upper()} for \"{subject}\". Timing [enter] ok / [e]arly / [l]ate: ").strip()
-            agent.timing_feedback(notice, {"e": "too_early", "l": "too_late"}.get(verdict, "ok"))
+            answer = input(f"  {notice.kind.upper()} for \"{subject}\". Timing [enter] ok / [e]arly / [l]ate: ").strip()
+            verdict = {"e": "too_early", "l": "too_late"}.get(answer, "ok")
+            agent.timing_feedback(notice, verdict)
+            response = f"{notice.kind} timing {verdict.replace('_', ' ')}"
+        self.audit.response(notice.email_id, response)
         self.show_decisions()   # an approval runs the action
 
 
