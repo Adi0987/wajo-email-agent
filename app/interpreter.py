@@ -49,7 +49,8 @@ class Interpreter:
             return {"decision": "yes", "instead": None, "timing": "ok", "acknowledgement": ""}
         if text in NO:
             return {"decision": "no", "instead": None, "timing": None, "acknowledgement": ""}
-        word, _, rest = text.removesuffix(" instead").partition(" ")
+        command = re.sub(r"^((no|nope|nah|actually|please|just)\b[,.!]?\s*)+", "", text).removesuffix(" instead")
+        word, _, rest = command.partition(" ")
         kind = ALIASES.get(word, word)
         if kind in ACTIONS:
             label = re.sub(r"^((it|with|as|under|to)\s+)+", "", rest).strip(" '\"") if kind == "label" else ""

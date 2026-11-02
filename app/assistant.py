@@ -97,6 +97,10 @@ class Assistant:
             self.agent.do_instead(instead, self.clock)
         return new + self._step()
 
+    def waiting(self) -> set[str]:
+        """Email ids with a question the user hasn't answered yet."""
+        return {notice.email_id for notice in self._open.values()}
+
     def note(self, text: str) -> dict:
         return self._add("note", text=text)
 
@@ -128,7 +132,7 @@ class Assistant:
             self.shown.add(email.id)
             new.append(self._email_message(email))
         if level == Level.SILENT:
-            new.append(self._add("silent", text=text, details=self._details(entry)))
+            new.append(self._add("silent", text=text, details=self._details(entry), about=self._about(email)))
         return new
 
     def _notice(self, notice: Notice) -> dict:
@@ -144,7 +148,12 @@ class Assistant:
         entry, text = self._decisions[notice.action]
         open_notice = notice if notice.kind in ("ask", "notify") else None
         return self._add(notice.kind, notice=open_notice, text=text, draft=notice.action.body,
-                         details=self._details(entry))
+                         details=self._details(entry), about=self._about(email))
+
+    def _about(self, email: Email) -> dict:
+        _, category = other_party(email, self.agent.mailbox)
+        return {"name": name_of(email.sender), "sender": email.sender, "category": CATEGORY_WORDS[category],
+                "subject": email.subject or "(no subject)", "date": f"{email.sent_at:%b %d %Y}", "body": email.body[:2000]}
 
     def _email_message(self, email: Email) -> dict:
         _, category = other_party(email, self.agent.mailbox)

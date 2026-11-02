@@ -62,14 +62,15 @@ class App:
         self.assistant.wait(float(form.get("days", 1)))
 
     def state(self) -> dict:
-        mailbox = self.assistant.agent.mailbox
+        mailbox, waiting = self.assistant.agent.mailbox, self.assistant.waiting()
         inbox = []
         for email in mailbox.emails.values():
             if email.sender == mailbox.user_address or email.id not in self.assistant.shown:
                 continue
-            status = ("Trash" if email.id in mailbox.trashed else "Archived" if email.id in mailbox.archived
-                      else "Draft ready" if email.id in mailbox.drafts else "Inbox")
-            inbox.append({"subject": email.subject or "(no subject)", "sender": email.sender, "status": status,
+            section = ("Waiting on you" if email.id in waiting else "Trash" if email.id in mailbox.trashed
+                       else "Archived" if email.id in mailbox.archived else "Drafts ready" if email.id in mailbox.drafts
+                       else "Inbox")
+            inbox.append({"subject": email.subject or "(no subject)", "sender": email.sender, "section": section,
                           "labels": sorted(mailbox.labels.get(email.id, ()))})
         return {"source": self.source, "settings": self.settings, "available": available(),
                 "user": mailbox.user_address, "remaining": len(self.feed),
