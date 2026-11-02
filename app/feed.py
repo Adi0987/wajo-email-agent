@@ -6,6 +6,7 @@ rule-based stand-in that needs no key.
 """
 import os
 from pathlib import Path
+from typing import Optional
 
 from agent.agent import Agent
 from agent.classifier import Classifier
@@ -14,7 +15,6 @@ from agent.mailbox import Mailbox
 from agent.models import Email
 from agent.proposer import Proposer
 from app import enron, offline_llm
-from app.narrator import Narrator
 from eval.inbox import USER, build_inbox
 
 ENRON_ZIP = "enron-email-dataset.zip"
@@ -32,8 +32,8 @@ def defaults() -> dict:
             "llm": "deepseek" if have["deepseek"] else "offline"}
 
 
-def build(source: str, persona: str, count: int, llm_choice: str) -> tuple[Agent, list[Email], Narrator, str]:
-    """(agent, emails to deliver in order, narrator, one line describing the session)."""
+def build(source: str, persona: str, count: int, llm_choice: str) -> tuple[Agent, list[Email], Optional[LLM], str]:
+    """(agent, emails to deliver in order, the LLM or None for offline, one line describing the session)."""
     if source == "enron":
         user, feed = enron.sample_inbox(ENRON_ZIP, persona, count)
         mailbox = Mailbox(user)
@@ -48,6 +48,6 @@ def build(source: str, persona: str, count: int, llm_choice: str) -> tuple[Agent
         where = f"{len(feed)} emails from the synthetic inbox"
     if llm_choice == "deepseek":
         llm = LLM(cache_path=".llm_cache_local.json")   # keeps these emails out of the eval cache
-        return Agent(mailbox, Proposer(llm), Classifier(llm)), feed, Narrator(llm), f"{where} · DeepSeek"
+        return Agent(mailbox, Proposer(llm), Classifier(llm)), feed, llm, f"{where} · DeepSeek"
     agent = Agent(mailbox, offline_llm.propose, offline_llm.classify)
-    return agent, feed, Narrator(None), f"{where} · offline stand-in (no API key)"
+    return agent, feed, None, f"{where} · offline stand-in (no API key)"

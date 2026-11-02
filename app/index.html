@@ -37,14 +37,13 @@
   .who { font-weight: 600; }
   .meta { color: var(--muted); font-size: 13px; }
   .subject { font-weight: 600; margin-top: 8px; }
-  .summary { margin-top: 2px; }
   details { margin-top: 6px; color: var(--muted); font-size: 13px; }
   details pre { white-space: pre-wrap; font: inherit; margin: 6px 0 0; color: var(--ink); }
   .msg { display: flex; gap: 10px; align-items: flex-start; }
   .msg .avatar { background: var(--accent); color: #fff; }
   .bubble { background: var(--bubble); border-radius: 4px 12px 12px 12px; padding: 10px 14px; max-width: 640px;
             border-left: 3px solid var(--k, var(--accent)); }
-  .bubble .text { font-weight: 600; }
+  .bubble .say { margin-top: 4px; }
   .chip { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 1px 8px;
           border-radius: 99px; color: #fff; background: var(--k); margin-right: 6px; vertical-align: 1px; }
   .why { color: var(--muted); font-size: 13px; margin-top: 4px; }
@@ -164,7 +163,6 @@ const PRESETS = {
   "Newsletter": {sender: "digest@techbrief.com", subject: "TechBrief weekly", authenticated: true, newsletter: true,
     body: "This week at TechBrief: top stories and picks for you. Unsubscribe at any time."},
 };
-const LEVEL = {ask: "ASK", notify: "NOTIFY", silent: "SILENT", escalate: "ESCALATE", nudge: "FOLLOW-UP", reminder: "REMINDER"};
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 let state = null, busy = false, user = "";
@@ -183,35 +181,38 @@ function initials(name) { return esc((name || "?").split(" ").map((p) => p[0]).j
 function emailCard(m) {
   return `<div class="email"><div class="top"><div class="avatar">${initials(m.name)}</div>
     <div><div class="who">${esc(m.name)}</div><div class="meta">${esc(m.category)} · ${esc(m.sender)} · ${esc(m.date)}</div></div></div>
-    <div class="subject">${esc(m.subject)}</div><div class="summary">${esc(m.summary)}</div>
+    <div class="subject">${esc(m.subject)}</div>
     <details><summary>Show email</summary><pre>${esc(m.body)}</pre></details></div>`;
 }
 
-function buttons(m) {
-  if (!m.open) return m.answer ? `<div class="answered">You: ${esc(m.answer.replace("_", " "))}</div>` : "";
-  const other = `<input placeholder="or tell me: archive, label reading, trash, keep, reply" data-other="${m.id}">
-                 <button data-send="${m.id}">Send</button>`;
-  if (m.kind === "ask") return `<div class="actions"><button class="primary" data-reply="yes" data-id="${m.id}">Yes</button>
-                                <button data-reply="no" data-id="${m.id}">No</button>${other}</div>`;
-  if (m.kind === "notify") return `<div class="actions"><button class="primary" data-reply="fine" data-id="${m.id}">Looks good</button>
-                                   <button data-reply="undo" data-id="${m.id}">Undo</button>${other}</div>`;
-  return `<div class="actions"><button class="primary" data-reply="ok" data-id="${m.id}">Good timing</button>
-          <button data-reply="too_early" data-id="${m.id}">Too early</button><button data-reply="too_late" data-id="${m.id}">Too late</button></div>`;
+const QUICK = {ask: [["yes", "Yes"], ["no", "No"]], notify: [["yes", "Looks good"], ["undo", "Undo"]],
+               nudge: [["ok", "Good timing"], ["too early", "Too early"], ["too late", "Too late"]]};
+QUICK.reminder = QUICK.nudge;
+
+function reply(m) {
+  if (!m.open) return m.answer ? `<div class="answered">You: ${esc(m.answer)}</div>` : "";
+  const quick = QUICK[m.kind].map(([value, label], i) =>
+    `<button ${i ? "" : 'class="primary"'} data-reply="${esc(value)}" data-id="${m.id}">${label}</button>`).join("");
+  return `<div class="actions">${quick}
+    <input placeholder="or reply in your own words, e.g. &quot;label it research&quot;" data-other="${m.id}">
+    <button data-send="${m.id}">Send</button></div>`;
 }
+
+const LABEL = {ask: "ASKING", notify: "DID IT · TOLD YOU", silent: "DID IT QUIETLY", escalate: "ESCALATED",
+               nudge: "FOLLOW-UP", reminder: "REMINDER"};
 
 function bubble(m) {
   if (m.kind === "email") return emailCard(m);
   if (m.kind === "note") return `<div class="note">${esc(m.text)}</div>`;
   if (m.kind === "result") return `<div class="note" style="color:var(--silent)">✔ ${esc(m.text)}</div>`;
-  const chip = LEVEL[m.kind] ? `<span class="chip">${LEVEL[m.kind]}</span>` : "";
   const details = m.details ? `<details><summary>Why this level?</summary>
       action check: ${esc(m.details.action)} · email check: ${esc(m.details.email)} · learned: ${esc(m.details.learned)}<br>
       ${esc(m.details.rate)}<br>The most cautious of the three wins.</details>` : "";
   return `<div class="msg k-${m.kind}"><div class="avatar">W</div><div class="bubble">
-    <div>${chip}<span class="text">${esc(m.text)}</span> ${esc(m.reason || "")}</div>
-    ${m.why ? `<div class="why">${esc(m.why)}</div>` : ""}
+    <div class="label"><span class="chip">${LABEL[m.kind]}</span></div>
+    <div class="say">${esc(m.text)}</div>
     ${m.draft ? `<div class="draft"><b>Draft:</b> ${esc(m.draft)}</div>` : ""}
-    ${details}${buttons(m)}</div></div>`;
+    ${details}${reply(m)}</div></div>`;
 }
 
 function stats() {
@@ -241,6 +242,10 @@ function render() {
       <span class="status">${esc([e.status, ...e.labels].join(" · "))}</span></div>`).join("") || `<div class="meta">Nothing yet.</div>`;
 }
 
+document.addEventListener("keydown", (event) => {
+  const id = event.target.dataset && event.target.dataset.other;
+  if (id && event.key === "Enter" && event.target.value.trim()) call("/api/answer", {id, reply: event.target.value.trim()});
+});
 document.addEventListener("click", (event) => {
   const t = event.target;
   if (t.dataset.reply) call("/api/answer", {id: t.dataset.id, reply: t.dataset.reply});

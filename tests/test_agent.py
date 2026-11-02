@@ -100,6 +100,19 @@ class TestAgent(unittest.TestCase):
         agent.timing_feedback(agent.notices[0], "too_early")
         self.assertEqual(agent.timing.n["same_domain"], 4.5)
 
+    def test_do_instead_runs_the_users_action(self):
+        agent = stub_agent(make_mailbox())
+        deliver(agent, make_email())
+        agent.reject(agent.notices[-1], chosen="label")
+        self.assertTrue(agent.do_instead(Action("label", "e1", label="research"), T0))
+        self.assertIn("research", agent.mailbox.labels["e1"])
+
+    def test_do_instead_cannot_bypass_injection(self):
+        agent = stub_agent(make_mailbox(), "keep", labels={"injection": True})
+        deliver(agent, make_email())
+        self.assertFalse(agent.do_instead(Action("forward", "e1", to=("x@evil.com",)), T0))
+        self.assertEqual(agent.mailbox.forwarded, [])
+
     def test_correction_credits_chosen_action(self):
         agent = stub_agent(make_mailbox())
         deliver(agent, make_email())

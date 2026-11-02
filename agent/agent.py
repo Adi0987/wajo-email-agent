@@ -88,6 +88,10 @@ class Agent:
         self.executor.undo(action)
         self._record(action, approved=False, chosen=chosen)
 
+    def do_instead(self, action: Action, now: datetime) -> bool:
+        """Runs what the user asked for instead. Feedback is recorded by reject/undo with `chosen`."""
+        return self.executor.run_requested(action, now)
+
     def timing_feedback(self, notice: Notice, verdict: str) -> None:
         """verdict: "too_early", "too_late" or "ok"."""
         _, category = other_party(self.mailbox.get(notice.email_id), self.mailbox)

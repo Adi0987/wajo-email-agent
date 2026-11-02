@@ -1,6 +1,6 @@
-"""Turns the agent's decisions into plain-language messages, and the user's replies into feedback.
+"""Turns the agent's decisions into chat messages, and the user's replies into feedback.
 
-Shared by the terminal (`wajo.py try`) and the web page (`wajo.py ui`). Presentation only:
+Shared by the browser (`wajo.py`) and the terminal (`wajo.py try`). Presentation only:
 every decision comes from the agent.
 """
 import itertools
@@ -9,11 +9,12 @@ from typing import Optional
 
 from agent.agent import Agent
 from agent.audit import AuditLog
-from agent.checks import ACTIONS
+from agent.llm import LLM
 from agent.models import Action, Email, Level
 from agent.notices import Notice
 from agent.rates import NOTIFY_AT, SILENT_AT
 from agent.senders import other_party
+from app.interpreter import Interpreter
 from app.narrator import Narrator, describe
 
 CATEGORY_WORDS = {"same_domain": "colleague", "contact": "someone you've emailed",
@@ -21,8 +22,6 @@ CATEGORY_WORDS = {"same_domain": "colleague", "contact": "someone you've emailed
 DONE = {"keep": "Left it in your inbox", "archive": "Archived it", "label": "Labeled it",
         "mark_read": "Marked it read", "trash": "Moved it to trash", "draft_reply": "Drafted a reply",
         "send": "Sent the reply", "forward": "Forwarded it", "unsubscribe": "Unsubscribed"}
-ALIASES = {"reply": "draft_reply", "leave": "keep", "inbox": "keep", "delete": "trash", "read": "mark_read"}
-CHOICES = "archive, label <name>, trash, keep, reply"
 
 
 def name_of(address: str) -> str:
@@ -34,15 +33,16 @@ def times(count: float) -> str:
 
 
 class Assistant:
-    def __init__(self, agent: Agent, narrator: Narrator, audit: AuditLog):
-        self.agent, self.narrator, self.audit = agent, narrator, audit
+    def __init__(self, agent: Agent, llm: Optional[LLM], audit: AuditLog):
+        self.agent, self.audit = agent, audit
+        self.narrator, self.interpreter = Narrator(llm), Interpreter(llm)
         self.messages: list[dict] = []
         self.clock: Optional[datetime] = None
+        self.shown: set[str] = set()     # email ids already introduced
         self._ids = itertools.count(1)
         self._log_seen = self._notices_seen = 0
-        self._decisions: dict = {}       # action -> (entry, reason)
+        self._decisions: dict = {}       # action -> (entry, message text)
         self._open: dict = {}            # message id -> notice waiting for an answer
-        self.shown: set[str] = set()     # email ids already introduced
 
     # --- input from the user's side ---
 
@@ -56,35 +56,45 @@ class Assistant:
     def wait(self, days: float) -> list[dict]:
         """Time passes; follow-ups and reminders may fire."""
         self.clock = (self.clock or datetime.now()) + timedelta(days=days)
-        return [self._add("note", text=f"It's now {self.clock:%a %b %d %Y}.")] + self._step()
+        return [self.note(f"It's now {self.clock:%a %b %d %Y}.")] + self._step()
 
     def answer(self, message_id: int, reply: str) -> list[dict]:
-        """reply: yes / no / fine / undo / ok / too_early / too_late, or an action like "label reading"."""
+        """The user's reply to an open message, in their own words."""
         notice = self._open.pop(message_id)
         message = next(m for m in self.messages if m["id"] == message_id)
-        message["open"], message["answer"] = False, reply
-        new = []
+        message["open"], message["answer"] = False, reply or "yes"
+        result = self.interpreter(reply, message["text"])
+        spec = result["instead"]
+        instead = Action(spec["kind"], notice.email_id, label=spec.get("label", ""), body=spec.get("body", "")) \
+            if spec else None
+        if instead and notice.action and instead.kind == notice.action.kind and not instead.label and not instead.body:
+            instead = None                 # "archive it" when I proposed archiving is a yes
+            result["decision"] = "yes"
+        agreed = result["decision"] == "yes" and not instead
         if notice.kind == "ask":
-            if reply == "yes":
+            if agreed:
                 self.agent.approve(notice, notice.at)
                 self.audit.response(notice.email_id, "approved")
             else:
-                chosen = self._chosen(reply, notice.email_id, new)
-                self.agent.reject(notice, chosen=chosen.kind if chosen else None)
-                self.audit.response(notice.email_id, f"rejected, wanted {chosen.kind}" if chosen else "rejected")
-                new.append(self._add("note", text=f"Got it. {self._remember(chosen)}".strip()))
+                self.agent.reject(notice, chosen=instead.kind if instead else None)
+                self.audit.response(notice.email_id, f"rejected, wanted {instead.kind}" if instead else "rejected")
         elif notice.kind == "notify":
-            if reply == "fine":
+            if agreed:
                 self.agent.confirm(notice)
                 self.audit.response(notice.email_id, "confirmed")
             else:
-                chosen = None if reply == "undo" else self._chosen(reply, notice.email_id, new)
-                self.agent.undo(notice.action, chosen=chosen.kind if chosen else None)
-                self.audit.response(notice.email_id, f"undone, wanted {chosen.kind}" if chosen else "undone")
-                new.append(self._add("note", text=f"Undone. {self._remember(chosen)}".strip()))
+                self.agent.undo(notice.action, chosen=instead.kind if instead else None)
+                self.audit.response(notice.email_id, f"undone, wanted {instead.kind}" if instead else "undone")
         else:
-            self.agent.timing_feedback(notice, reply)
-            self.audit.response(notice.email_id, f"{notice.kind} timing {reply.replace('_', ' ')}")
+            verdict = result["timing"] or "ok"
+            self.agent.timing_feedback(notice, verdict)
+            self.audit.response(notice.email_id, f"{notice.kind} timing {verdict.replace('_', ' ')}")
+        new = []
+        acknowledgement = result["acknowledgement"] or self._acknowledge(notice, agreed, instead)
+        if acknowledgement:
+            new.append(self.note(acknowledgement))
+        if instead:
+            self.agent.do_instead(instead, self.clock)
         return new + self._step()
 
     def note(self, text: str) -> dict:
@@ -107,62 +117,61 @@ class Assistant:
     def _decision(self, entry: dict) -> list[dict]:
         action, level = entry["action"], entry["level"]
         if entry["approved"]:
-            text = f"{DONE[action.kind]}." if entry["executed"] else "I didn't do it: it changed or is no longer allowed."
+            text = f"{DONE[action.kind]}." if entry["executed"] else "I didn't do that: it's no longer allowed."
             return [self._add("result", text=text)]
         email = self.agent.mailbox.get(action.email_id)
-        summary, reason = self.narrator(self.agent.mailbox.user_address, email, action, level)
-        self._decisions[action] = (entry, reason)
+        text = self.narrator(self.agent.mailbox.user_address, email, action, level, self._why(entry))
+        self._decisions[action] = (entry, text)
         self.audit.decision(entry, email, other_party(email, self.agent.mailbox)[1], self.agent.labels.get(email.id, {}))
         new = []
         if email.id not in self.shown and email.sender != self.agent.mailbox.user_address:
             self.shown.add(email.id)
-            new.append(self._email_message(email, summary))
+            new.append(self._email_message(email))
         if level == Level.SILENT:
-            new.append(self._add("silent", text=f"{DONE[action.kind]} quietly.", reason=reason,
-                                 details=self._details(entry)))
+            new.append(self._add("silent", text=text, details=self._details(entry)))
         return new
 
     def _notice(self, notice: Notice) -> dict:
         email = self.agent.mailbox.get(notice.email_id)
-        if notice.kind in ("nudge", "reminder"):
-            if notice.kind == "nudge":
-                text = f"No reply from {name_of(email.to[0])} to \"{email.subject}\" after {(notice.at - email.sent_at).days} days."
-            else:
-                text = f"Reminder: \"{email.subject}\" is due {self.agent.scheduler.deadlines[email.id]:%a %b %d}."
-            return self._add(notice.kind, text=text, question="Good timing?", notice=notice)
-        entry, reason = self._decisions[notice.action]
-        common = dict(reason=reason, why=self._why(entry), details=self._details(entry))
-        if notice.kind == "ask":
-            plan = "I'd leave this one for you." if notice.action.kind == "keep" else f"I'd like to {describe(notice.action)}."
-            return self._add("ask", text=plan, draft=notice.action.body, question="OK?", notice=notice, **common)
-        if notice.kind == "notify":
-            return self._add("notify", text=f"{DONE[notice.action.kind]}.", question="All good?", notice=notice, **common)
-        return self._add("escalate", text="I'm not touching this one.", reason=reason, details=self._details(entry),
-                         why="It looks like an attempt to manipulate me or phish you. Worth checking with the sender directly.")
+        if notice.kind == "nudge":
+            days = (notice.at - email.sent_at).days
+            return self._add("nudge", notice=notice, text=f"You emailed {name_of(email.to[0])} about \"{email.subject}\" "
+                             f"{days} days ago and haven't heard back. Want to follow up? Is this good timing?")
+        if notice.kind == "reminder":
+            due = self.agent.scheduler.deadlines[email.id]
+            return self._add("reminder", notice=notice, text=f"Heads up: \"{email.subject}\" from {name_of(email.sender)} "
+                             f"is due {due:%A, %b %d}. Was this reminder good timing?")
+        entry, text = self._decisions[notice.action]
+        open_notice = notice if notice.kind in ("ask", "notify") else None
+        return self._add(notice.kind, notice=open_notice, text=text, draft=notice.action.body,
+                         details=self._details(entry))
 
-    def _email_message(self, email: Email, summary: str) -> dict:
+    def _email_message(self, email: Email) -> dict:
         _, category = other_party(email, self.agent.mailbox)
         return self._add("email", sender=email.sender, name=name_of(email.sender),
                          category=CATEGORY_WORDS[category], subject=email.subject or "(no subject)",
-                         date=f"{email.sent_at:%b %d %Y}", summary=summary, body=email.body[:2000])
+                         date=f"{email.sent_at:%b %d %Y}", body=email.body[:2000])
 
     def _why(self, entry: dict) -> str:
-        """Why the agent asked or notified, from the check that set the level."""
+        """Why the agent asked, notified or went quiet, from the check that set the level."""
         checks, action, level = entry["checks"], entry["action"], entry["level"]
+        if level == Level.ESCALATE:
+            return "the email looks like phishing or an attempt to get you or me to send mail somewhere it shouldn't go"
         if checks["action"] == level:
-            return "This would leave your mailbox and can't be undone, so I always check first."
+            return "this would leave your mailbox and can't be undone, so I always check first"
         if checks["email"] == level:
-            return f"It mentions money, so I'm {'checking with you' if level == Level.ASK else 'letting you know'}."
+            return "it mentions money, so I check with you or tell you"
         sender = other_party(self.agent.mailbox.get(action.email_id), self.agent.mailbox)[0]
         approvals, rejections = self.agent.rates.by_sender[(action.kind, sender)]
+        if level == Level.SILENT:
+            return f"you've okayed this {times(approvals)}" if approvals else "you always okay this for similar senders"
         if level == Level.NOTIFY:
-            return f"You've okayed this {times(approvals)}, so I went ahead." if approvals \
-                else "You usually okay this for similar senders, so I went ahead."
+            return f"you've okayed this {times(approvals)}" if approvals else "you usually okay this for similar senders"
         if rejections:
-            return "You've said no to this before, so I'm checking."
+            return "you've said no to this before"
         if approvals:
-            return f"You've okayed this {times(approvals)} so far. A few more and I'll stop asking."
-        return f"I haven't learned how you handle this from {name_of(sender)} yet."
+            return f"you've okayed this {times(approvals)} so far, a few more and I'll stop asking"
+        return f"this is the first time I've seen this from {name_of(sender)}, so I don't know your preference yet"
 
     def _details(self, entry: dict) -> dict:
         action = entry["action"]
@@ -171,20 +180,13 @@ class Assistant:
         return {**{name: level.name.title() for name, level in entry["checks"].items()},
                 "rate": f"approval rate {rate:.0%} (Notify ≥{NOTIFY_AT:.0%}, Silent ≥{SILENT_AT:.0%})"}
 
-    def _chosen(self, reply: str, email_id: str, new: list) -> Optional[Action]:
-        """The action the user typed, e.g. "trash" or "label to read", or None."""
-        word, _, rest = reply.strip().lower().partition(" ")
-        kind = ALIASES.get(word, word)
-        if kind in ACTIONS:
-            label = rest.replace("with", "", 1).strip().strip("'\"") if kind == "label" else ""
-            return Action(kind, email_id, label=label)
-        if reply not in ("no", "undo"):
-            new.append(self._add("note", text=f"I didn't understand \"{reply}\", so I'm taking it as a no. "
-                                              f"I understand: {CHOICES}."))
-        return None
-
-    def _remember(self, chosen: Optional[Action]) -> str:
-        return f"I'll remember you'd rather {describe(chosen)} for emails like this." if chosen else ""
+    @staticmethod
+    def _acknowledge(notice: Notice, agreed: bool, instead: Optional[Action]) -> str:
+        if instead:
+            return f"OK, I'll {describe(instead)} instead, and remember that for emails like this."
+        if agreed:
+            return ""
+        return "Undone." if notice.kind == "notify" else "OK, I won't."
 
     def _add(self, kind: str, notice: Optional[Notice] = None, **fields) -> dict:
         message = {"id": next(self._ids), "kind": kind, "open": notice is not None, **fields}

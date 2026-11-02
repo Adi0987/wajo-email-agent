@@ -10,7 +10,7 @@ Python 3.9+, standard library only. Design decisions: [DESIGN.md](DESIGN.md).
 python3 wajo.py
 ```
 
-Opens the assistant in your browser. Press **Next email** and an email arrives; the assistant tells you what it is, what it wants to do and why, and whether it's asking first or already did it. Answer **Yes**, **No**, **Undo**, or tell it what you'd rather do ("label reading"), and it learns. **Wait a day** moves the clock so follow-ups and deadline reminders fire.
+Opens the assistant in your browser. Press **Next email** and an email arrives; the assistant tells you in plain words what it is, what it wants to do or already did, and why. Reply in your own words ("yes", "no, archive it", "label it research") or with the quick buttons. It does what you ask, within the safety checks, and learns from it. **Wait a day** moves the clock so follow-ups and deadline reminders fire.
 
 **Admin** has two tabs:
 - **Session:** where emails come from (a random sample of a real Enron inbox, acting as that person, or the synthetic test inbox), how many, and who decides (DeepSeek or an offline rule-based stand-in). Starting a new session resets what the assistant has learned.

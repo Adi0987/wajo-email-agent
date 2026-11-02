@@ -53,6 +53,12 @@ class Executor:
         self._record(now, action, Level.ASK, checks, executed=allowed, approved=True)
         return allowed
 
+    def run_requested(self, action: Action, now: datetime) -> bool:
+        """The user asked for this exact action, so their request is the approval. The checks still apply."""
+        approval_id = self.approvals.request(action)
+        self.approvals.approve(approval_id)
+        return self.run_approved(approval_id, action, now)
+
     def undo(self, action: Action) -> None:
         self.mailbox.undo(action)
 

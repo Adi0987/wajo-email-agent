@@ -1,16 +1,20 @@
-"""`python3 wajo.py try`: the assistant in your terminal. Emails arrive one at a time; you answer."""
+"""`python3 wajo.py try`: the assistant in your terminal. Emails arrive one at a time; reply in your own words."""
+import textwrap
 from collections import deque
 from datetime import datetime
 
 from agent.audit import AuditLog
-from app.assistant import CHOICES, Assistant
+from app.assistant import Assistant
 from app.feed import build, defaults
 from app.style import BLUE, BOLD, CYAN, DIM, GREEN, RED, YELLOW, paint
 
-COLOR = {"ask": YELLOW, "notify": CYAN, "silent": GREEN, "escalate": RED, "nudge": BLUE, "reminder": BLUE,
-         "result": GREEN, "note": DIM}
-ICON = {"ask": "?", "notify": "✔", "silent": "✔", "escalate": "⚠", "nudge": "⏰", "reminder": "⏰",
-        "result": "✔", "note": " "}
+COLOR = {"ask": YELLOW, "notify": CYAN, "silent": GREEN, "escalate": RED, "nudge": BLUE, "reminder": BLUE}
+LABEL = {"ask": "asking", "notify": "did it, told you", "silent": "did it quietly", "escalate": "escalated",
+         "nudge": "follow-up", "reminder": "reminder"}
+
+
+def wrap(text: str, indent: str = "    ") -> str:
+    return textwrap.fill(text, width=100, initial_indent=indent, subsequent_indent=indent)
 
 
 def show(message: dict, details: bool) -> None:
@@ -18,35 +22,24 @@ def show(message: dict, details: bool) -> None:
     if kind == "email":
         print("\n" + paint(f"━━━ {message['name']} ", BLUE, BOLD)
               + paint(f"({message['category']}, {message['sender']}) · {message['date']}", DIM))
-        print(f"    \"{paint(message['subject'], BOLD)}\"\n    {message['summary']}")
-        return
-    print(paint(f"\n  {ICON[kind]} {message['text']} ", BOLD, COLOR[kind]) + message.get("reason", ""))
-    if message.get("why"):
-        print(paint(f"    {message['why']}", DIM))
-    if message.get("draft"):
-        print(paint("    Draft: ", DIM) + message["draft"][:300])
-    if details and message.get("details"):
-        print(paint("    " + " · ".join(f"{k} {v}" for k, v in message["details"].items()), DIM))
-
-
-def ask(message: dict) -> str:
-    """Reads the user's answer and turns it into the assistant's reply words."""
-    if message["kind"] == "ask":
-        answer = input(paint(f"    OK? [y] yes · [n] no · or tell me what to do ({CHOICES}) ", DIM)).strip()
-        return {"": "yes", "y": "yes", "yes": "yes", "n": "no", "no": "no"}.get(answer.lower(), answer)
-    if message["kind"] == "notify":
-        answer = input(paint(f"    [enter] fine · [u] undo · or tell me what to do instead ({CHOICES}) ", DIM)).strip()
-        return {"": "fine", "u": "undo"}.get(answer.lower(), answer)
-    answer = input(paint("    Good timing? [enter] yes · [e] too early · [l] too late ", DIM)).strip().lower()
-    return {"e": "too_early", "l": "too_late"}.get(answer, "ok")
+        print(f"    \"{paint(message['subject'], BOLD)}\"")
+    elif kind in ("note", "result"):
+        print(paint(wrap(("✔ " if kind == "result" else "") + message["text"]), GREEN if kind == "result" else DIM))
+    else:
+        print("\n" + paint(f"  Wajo · {LABEL[kind]}", BOLD, COLOR[kind]))
+        print(wrap(message["text"]))
+        if message.get("draft"):
+            print(paint(wrap("Draft: " + message["draft"][:300]), DIM))
+        if details and message.get("details"):
+            print(paint("    " + " · ".join(f"{k} {v}" for k, v in message["details"].items()), DIM))
 
 
 def run(settings: dict, details: bool) -> None:
     s = {**defaults(), **settings}
-    agent, feed, narrator, source = build(s["source"], s["persona"], s["count"], s["llm"])
-    assistant = Assistant(agent, narrator, AuditLog(f"runs/audit_{datetime.now():%Y%m%d_%H%M%S}.csv"))
-    print(paint("\nHi, I'm your email assistant. ", BOLD) + f"Here come {source}. "
-          "I'll ask before doing things until I learn how you like them handled.")
+    agent, feed, llm, source = build(s["source"], s["persona"], s["count"], s["llm"])
+    assistant = Assistant(agent, llm, AuditLog(f"runs/audit_{datetime.now():%Y%m%d_%H%M%S}.csv"))
+    print(paint("\nHi, I'm Wajo, your email assistant. ", BOLD) + f"Here come {source}. "
+          "Reply in your own words, like \"yes\", \"archive it instead\" or \"label it research\". Enter means yes.")
     for number, email in enumerate(feed, 1):
         print(paint(f"\n[{number}/{len(feed)}]", DIM), end="")
         queue = deque(assistant.deliver(email))
@@ -54,7 +47,7 @@ def run(settings: dict, details: bool) -> None:
             message = queue.popleft()
             show(message, details)
             if message["open"]:
-                queue.extend(assistant.answer(message["id"], ask(message)))
+                queue.extend(assistant.answer(message["id"], input(paint("  you › ", BOLD))))
         if input(paint("\n  [enter] next email · q quit ", DIM)).strip().lower() == "q":
             break
     print("\n" + paint("Session summary", BOLD) + "\n" + assistant.audit.summary())

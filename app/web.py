@@ -25,10 +25,10 @@ class App:
         """Starts a fresh session: new agent (nothing learned), new emails, new audit log."""
         s = {**defaults(), **settings}
         s["count"] = int(s["count"])
-        agent, feed, narrator, source = build(s["source"], s["persona"], s["count"], s["llm"])   # may fail: keep old session
+        agent, feed, llm, source = build(s["source"], s["persona"], s["count"], s["llm"])   # may fail: keep old session
         self.settings, self.source = s, source
         self.audit_path = f"runs/audit_{datetime.now():%Y%m%d_%H%M%S}.csv"
-        self.assistant = Assistant(agent, narrator, AuditLog(self.audit_path))
+        self.assistant = Assistant(agent, llm, AuditLog(self.audit_path))
         self.feed = deque(feed)
         self.planted = 0
 
