@@ -63,7 +63,7 @@ The LLM suggests an action. Three checks decide how much the agent does on its o
 
 The agent keeps an approval rate for each action and sender, such as "archive email from news@example.com". Every user response updates it. An approval counts as one approval. A rejection, an undo, or an edit to a draft counts as one rejection. When the user rejects an action and picks a different one, the rejected action gets a rejection and the chosen action gets an approval.
 
-A new sender has no history, so it starts from its category's rate, counted as 10 responses. Each response from that sender replaces one of those 10, so after 10 responses only the sender's own record counts. Categories: contact, same domain, newsletter (has an unsubscribe header) or unknown.
+A sender's first email always asks. After that, the sender's category also counts, as up to 10 responses, and each further response from that sender replaces one of those 10, so after 10 responses only the sender's own record counts. Testing on real Enron mail showed why the first email asks: strangers are too varied to trust as a group. Categories: contact, same domain, newsletter (has an unsubscribe header) or unknown.
 
 Categories come from the exact sender address, never the display name. Contact means an address the user has emailed before. Same domain means an exact domain match. Contact and same domain also require passing sender authentication. Anything else is unknown. A hacked contact account gets that contact's trust, and checks 1 and 2 still apply.
 

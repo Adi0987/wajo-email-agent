@@ -28,9 +28,15 @@ class TestRates(unittest.TestCase):
         rates.record("archive", "a@news.com", "newsletter", approved=False)
         self.assertEqual(rates.level("archive", "a@news.com", "newsletter"), Level.NOTIFY)
 
-    def test_new_sender_borrows_category(self):
+    def test_first_email_from_new_sender_asks(self):
         rates = ApprovalRates()
         approve(rates, 15)
+        self.assertEqual(rates.level("archive", "b@news.com", "newsletter"), Level.ASK)
+
+    def test_new_sender_borrows_category_after_one_response(self):
+        rates = ApprovalRates()
+        approve(rates, 15)
+        approve(rates, 1, sender="b@news.com")
         self.assertEqual(rates.level("archive", "b@news.com", "newsletter"), Level.SILENT)
 
     def test_no_drop_when_sender_builds_history(self):
