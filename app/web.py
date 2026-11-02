@@ -11,7 +11,9 @@ from pathlib import Path
 
 from agent.audit import AuditLog
 from agent.models import Email
-from app.assistant import Assistant
+from agent.rates import cautious_rate
+from agent.senders import other_party
+from app.assistant import CATEGORY_WORDS, Assistant
 from app.feed import available, build, defaults
 
 PAGE = Path(__file__).with_name("index.html")
@@ -73,9 +75,44 @@ class App:
             inbox.append({"subject": email.subject or "(no subject)", "sender": email.sender, "section": section,
                           "labels": sorted(mailbox.labels.get(email.id, ()))})
         return {"source": self.source, "settings": self.settings, "available": available(),
+                "preferences": self.preferences(), "timing": self.timing(), "scheduled": self.scheduled(),
                 "user": mailbox.user_address, "remaining": len(self.feed),
                 "clock": f"{self.assistant.clock:%a %b %d %Y}" if self.assistant.clock else "",
                 "messages": self.assistant.messages, "inbox": inbox[::-1], "audit": self.audit_path}
+
+
+    def preferences(self) -> dict:
+        """What the agent has learned from feedback: per sender, and per kind of sender."""
+        agent = self.assistant.agent
+        mailbox, rates = agent.mailbox, agent.rates
+        category = {}
+        for email in mailbox.emails.values():
+            address, kind_of_sender = other_party(email, mailbox)
+            category[address] = kind_of_sender
+        senders = [{"who": sender, "action": kind, "approved": int(a), "rejected": int(r),
+                    "level": rates.level(kind, sender, category.get(sender, "unknown")).name.title()}
+                   for (kind, sender), (a, r) in rates.by_sender.items() if a or r]
+        groups = [{"who": CATEGORY_WORDS.get(group, group), "action": kind, "approved": int(a), "rejected": int(r),
+                   "rate": f"{cautious_rate(a, r):.0%}"}
+                  for (kind, group), (a, r) in rates.by_category.items() if a or r]
+        return {"senders": senders, "groups": groups}
+
+    def timing(self) -> list[dict]:
+        timing = self.assistant.agent.timing
+        groups = sorted(set(timing.n) | set(timing.l))
+        return [{"who": CATEGORY_WORDS.get(g, g), "follow_up": f"{timing.n[g]:.1f} days",
+                 "reminder": f"{timing.l[g]:.1f} days before"} for g in groups]
+
+    def scheduled(self) -> list[dict]:
+        items = []
+        for item in self.assistant.agent.scheduler.pending():
+            email = item["email"]
+            if item["kind"] == "follow_up":
+                what = f"Follow up with {email.to[0]} on \"{email.subject}\" if no reply"
+            else:
+                what = f"Remind you about \"{email.subject}\" (due {item['deadline']:%b %d})"
+            items.append({"what": what, "at": f"{item['at']:%a %b %d %H:%M}"})
+        return items
 
 
 def serve(settings: dict, port: int = 8000) -> None:

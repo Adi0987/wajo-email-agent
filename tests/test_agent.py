@@ -76,6 +76,15 @@ class TestAgent(unittest.TestCase):
         agent.tick(T0 + timedelta(days=3))
         self.assertEqual(agent.notices[0].kind, "nudge")
 
+    def test_pending_lists_what_will_fire(self):
+        deadline = T0 + timedelta(days=5)
+        agent = stub_agent(make_mailbox(), "keep", labels={"deadline": deadline})
+        deliver(agent, make_email())
+        agent.mailbox.receive(make_email(id="s1", sender=USER, to=("boss@wajo.ai",), sent_at=T0))
+        pending = agent.scheduler.pending()
+        self.assertEqual([(p["kind"], p["at"]) for p in pending],
+                         [("follow_up", T0 + timedelta(days=3)), ("reminder", deadline - timedelta(days=1))])
+
     def test_no_follow_up_for_mail_sent_before_the_agent_started(self):
         agent = stub_agent(make_mailbox())
         agent.mailbox.receive(make_email(id="s1", sender=USER, to=("boss@wajo.ai",), sent_at=T0 - timedelta(days=30)))

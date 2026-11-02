@@ -28,7 +28,7 @@ def available() -> dict:
 def defaults() -> dict:
     """The best session this machine can run."""
     have = available()
-    return {"source": "enron" if have["enron"] else "synthetic", "persona": "kaminski-v", "count": 20,
+    return {"source": "enron" if have["enron"] else "synthetic", "persona": "kaminski-v", "count": 200,
             "llm": "deepseek" if have["deepseek"] else "offline"}
 
 

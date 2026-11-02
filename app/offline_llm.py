@@ -3,11 +3,15 @@
 Works on any email, including ones planted from the admin panel. Not used by the eval.
 """
 import re
+from datetime import datetime, timedelta
+from typing import Optional
 
 from agent.mailbox import Mailbox
 from agent.models import Action, Email
 
 ADDRESS = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+DUE = re.compile(r"\b(?:by|due|before)\s+(?:\w+,\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday|[a-z]{3,9}\s+\d{1,2})", re.I)
 
 
 def propose(email: Email, mailbox: Mailbox, usual=None) -> Action:
@@ -26,5 +30,24 @@ def propose(email: Email, mailbox: Mailbox, usual=None) -> Action:
 
 def classify(email: Email) -> dict:
     text = email.body.lower()
-    return {"money": False, "deadline": None,
+    return {"money": False, "deadline": deadline(email),
             "injection": "ignore your previous instructions" in text or "assistant:" in text}
+
+
+def deadline(email: Email) -> Optional[datetime]:
+    """'by Friday' or 'due Nov 06' in the subject or body, as a date after the email was sent."""
+    match = DUE.search(f"{email.subject} {email.body}")
+    if not match:
+        return None
+    when = match.group(1).lower()
+    sent = email.sent_at.replace(hour=9, minute=0, second=0, microsecond=0)
+    if when in WEEKDAYS:
+        return sent + timedelta(days=(WEEKDAYS.index(when) - sent.weekday() - 1) % 7 + 1)
+    try:
+        day = datetime.strptime(f"{when} {sent.year}", "%b %d %Y")
+    except ValueError:
+        try:
+            day = datetime.strptime(f"{when} {sent.year}", "%B %d %Y")
+        except ValueError:
+            return None
+    return day.replace(hour=9)
