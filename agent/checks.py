@@ -18,6 +18,9 @@ ACTIONS = {
 }
 
 
+USER_ONLY = {"draft_reply", "send"}    # replies happen only when the user asks; never proposed or learned
+
+
 def is_external(kind: str) -> bool:
     return ACTIONS[kind][0]
 

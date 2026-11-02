@@ -1,9 +1,7 @@
 """LLM step 1: suggest an action. It never decides the autonomy level."""
 from typing import Optional
 
-from agent.checks import ACTIONS
-
-USER_ONLY = {"draft_reply", "send"}    # the agent writes replies only when the user asks for one
+from agent.checks import ACTIONS, USER_ONLY
 from agent.llm import LLM
 from agent.mailbox import Mailbox
 from agent.models import Action, Email

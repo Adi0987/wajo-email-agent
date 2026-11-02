@@ -47,8 +47,10 @@
   .k-ask { --k: var(--ask); } .k-notify { --k: var(--notify); } .k-silent { --k: var(--silent); }
   .k-escalate { --k: var(--escalate); } .k-nudge, .k-reminder, .k-remind_me { --k: var(--accent); }
   .row.them.k-escalate .bubble { box-shadow: inset 3px 0 0 var(--escalate); }
+  .typing { color: var(--muted); font-style: italic; }
   .why { font-size: 12px; color: var(--muted); margin: 0 0 6px 10px; }
-  .draft { font-size: 13px; color: var(--muted); margin: 2px 0 4px 10px; max-width: 78%; }
+  .draft { font-size: 13px; margin: 4px 0 4px 10px; max-width: 70%; white-space: pre-wrap; padding: 8px 12px;
+           border: 1px dashed var(--line); border-radius: 12px; background: var(--panel); }
   .done { font-size: 12px; color: var(--silent); margin: 2px 0 6px 10px; }
 
   .composer { border-top: 1px solid var(--line); padding: 10px 14px 14px; background: var(--bg); }
@@ -184,6 +186,7 @@ const PRESETS = {
     body: "This week at TechBrief: top stories and picks for you. Unsubscribe at any time."},
 };
 const QUICK = {ask: [["yes", "Yes"], ["no", "No"]], notify: [["yes", "Looks good"], ["undo", "Undo"]],
+               send: [["send it", "Send it"], ["no", "Don't send"]],
                nudge: [["ok", "Good timing"], ["too early", "Too early"], ["too late", "Too late"]]};
 QUICK.reminder = QUICK.nudge;
 const FOOT = {ask: "asked first", notify: "did it, told you", silent: "did it quietly", escalate: "escalated",
@@ -196,14 +199,14 @@ const expanded = new Set();
 
 async function call(path, body) {
   if (busy) return;
-  busy = true; render();
+  busy = true; render(); $("thread").scrollTop = $("thread").scrollHeight;
   try {
     const res = await fetch(path, body === undefined ? {} : {method: "POST", body: JSON.stringify(body)});
     state = await res.json();
   } finally { busy = false; render(); $("thread").scrollTop = $("thread").scrollHeight; }
 }
 
-const openQuestion = () => state && state.messages.find((m) => m.open);
+const openQuestion = () => state && [...state.messages].reverse().find((m) => m.open);
 
 function message(m) {
   if (m.kind === "email") return "";                       // the thread shows the email inside Wajo's message
@@ -216,11 +219,10 @@ function message(m) {
   const why = expanded.has("why" + m.id) && m.details
     ? `<div class="why">action check ${esc(m.details.action)} · email check ${esc(m.details.email)} · learned ${esc(m.details.learned)}
        · ${esc(m.details.rate)}. The most cautious of the three wins.</div>` : "";
-  const answer = m.answer ? `<div class="row me"><div class="bubble">${esc(m.answer)}</div></div>` : "";
   return `${head}<div class="row them k-${m.kind}"><div class="bubble">${esc(m.text)}</div></div>
-    ${m.draft ? `<div class="draft">Draft: ${esc(m.draft)}</div>` : ""}
+    ${m.draft ? `<div class="draft">${esc(m.draft)}</div>` : ""}
     <div class="foot k-${m.kind}"><span class="dot"></span>${FOOT[m.kind]}${m.details ? ` · <a data-why="${m.id}">why?</a>` : ""}</div>
-    ${why}${answer}`;
+    ${why}`;
 }
 
 function inbox() {
@@ -276,13 +278,14 @@ function render() {
   $("next").disabled = busy || !state.remaining;
   $("wait").disabled = $("admin").disabled = busy;
   $("thread").innerHTML = state.messages.map(message).join("")
+    + (busy ? `<div class="row them"><div class="bubble typing">Wajo is typing…</div></div>` : "")
     || `<div class="empty">Press <b>Sample New Email Into Inbox</b> and I'll tell you about it.<br>Use <b>Admin</b> to plant your own emails.</div>`;
   const open = openQuestion();
-  $("quick").innerHTML = open ? QUICK[open.kind].map(([value, label], i) =>
+  $("quick").innerHTML = open ? QUICK[open.kind === "ask" && open.draft ? "send" : open.kind].map(([value, label], i) =>
       `<button ${i ? "" : 'class="primary"'} data-quick="${esc(value)}">${label}</button>`).join("")
-    : `<span class="hint">${busy ? "Wajo is thinking…" : "Nothing to answer right now. Anything you tell me goes into what I know about you."}</span>`;
-  $("reply").placeholder = open ? "Reply in your own words, e.g. \"no, label it research\""
-                                : "Tell me something about how you work, e.g. \"I run the research group\"";
+    : `<span class="hint">${busy ? "Wajo is thinking…" : "Nothing to answer right now."}</span>`;
+  $("reply").placeholder = open ? "Reply in your own words, e.g. \"no, label it research\" or \"reply saying thanks\""
+                                : "Ask me anything, give me an instruction, or tell me how you work";
   $("reply").disabled = $("send").disabled = busy;
   document.querySelectorAll("[data-quick]").forEach((b) => b.disabled = busy);
   $("side-inbox").innerHTML = inbox();
@@ -290,9 +293,9 @@ function render() {
 }
 
 function answer(text) {
-  const open = openQuestion();
-  if (open) call("/api/answer", {id: open.id, reply: text});
-  else if (text) call("/api/tell", {text});
+  if (!text && !openQuestion()) return;
+  state.messages.push({id: 0, kind: "user", text: text || "yes"});   // show it right away
+  call("/api/say", {text});
 }
 $("compose").onsubmit = (event) => {
   event.preventDefault();

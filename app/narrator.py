@@ -48,19 +48,20 @@ class Narrator:
         situation, ending = SITUATION[level]
         if self.llm is None:
             return self.offline(email, action, level, why)
-        prompt = PROMPT.format(user=user, situation=situation.format(action=describe(action)), why=why, ending=ending)
+        prompt = PROMPT.format(user=user, situation=situation.format(action=describe(action)), ending=ending,
+                               why=why or "no particular reason worth mentioning; don't explain, just ask")
         return str(self.llm.complete_json(prompt, format_email(email)).get("message", "")) or \
             self.offline(email, action, level, why)
 
     @staticmethod
     def offline(email: Email, action: Action, level: Level, why: str) -> str:
         about = f"It says: \"{first_line(email.body)[:160]}\""
-        because = f"{why[:1].upper()}{why[1:]}."
+        because = f" {why[:1].upper()}{why[1:]}." if why else ""
         plan = "leave this one for you" if action.kind == "keep" else describe(action)
         return {
-            Level.SILENT: f"{about} I went ahead and did it: {plan}. {because}",
-            Level.NOTIFY: f"{about} I went ahead and did it: {plan}. {because} You can undo it.",
-            Level.ASK: f"{about} I'd {plan}. {because} OK?",
+            Level.SILENT: f"{about} I went ahead and did it: {plan}.{because}",
+            Level.NOTIFY: f"{about} I went ahead and did it: {plan}.{because} You can undo it.",
+            Level.ASK: f"{about} Should I {plan}?{because}" if action.kind != "keep" else f"{about} I'd {plan}.{because} OK?",
             Level.ESCALATE: f"{about} This looks like an attempt to manipulate me or phish you, so I did nothing. "
                             "Worth checking with the sender directly.",
         }[level]

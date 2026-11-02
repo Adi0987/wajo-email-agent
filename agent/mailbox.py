@@ -58,7 +58,8 @@ class Mailbox:
             self.receive(Email(
                 id=f"{email.id}-reply", thread_id=email.thread_id,
                 sender=self.user_address, to=action.to,
-                subject=f"Re: {email.subject}", body=action.body, sent_at=now,
+                subject=email.subject if email.subject.lower().startswith("re:") else f"Re: {email.subject}",
+                body=action.body, sent_at=now,
             ))
         elif action.kind == "forward":
             self.forwarded.append(action)

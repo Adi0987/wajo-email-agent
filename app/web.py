@@ -56,11 +56,8 @@ class App:
         else:
             self.assistant.deliver(email)
 
-    def answer(self, form: dict) -> None:
-        self.assistant.answer(int(form["id"]), form["reply"])
-
-    def tell(self, form: dict) -> None:
-        self.assistant.tell(form["text"])
+    def say(self, form: dict) -> None:
+        self.assistant.say(form.get("text", ""))
 
     def profile(self, form: dict) -> None:
         self.assistant.profile.replace(form["text"])
@@ -91,8 +88,8 @@ class App:
 
 def serve(settings: dict, port: int = 8000) -> None:
     app = App(settings)
-    routes = {"/api/next": app.next, "/api/plant": app.plant, "/api/answer": app.answer, "/api/wait": app.wait,
-              "/api/session": app.session, "/api/tell": app.tell, "/api/profile": app.profile}
+    routes = {"/api/next": app.next, "/api/plant": app.plant, "/api/say": app.say, "/api/wait": app.wait,
+              "/api/session": app.session, "/api/profile": app.profile}
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):

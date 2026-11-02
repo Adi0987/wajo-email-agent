@@ -3,7 +3,7 @@ from collections import deque
 from datetime import datetime
 from typing import Callable, Optional
 
-from agent.checks import action_check, email_check
+from agent.checks import USER_ONLY, action_check, email_check
 from agent.executor import Executor
 from agent.flags import detect_flags
 from agent.mailbox import Mailbox
@@ -103,7 +103,9 @@ class Agent:
             self.timing.reminder_feedback(category, verdict)
 
     def _record(self, action: Action, approved: bool, chosen: Optional[str] = None) -> None:
+        """Learns triage preferences. Replies are always the user's own request, so they aren't learned."""
         sender, category = other_party(self.mailbox.get(action.email_id), self.mailbox)
-        self.rates.record(action.kind, sender, category, approved)
-        if chosen:
+        if action.kind not in USER_ONLY:
+            self.rates.record(action.kind, sender, category, approved)
+        if chosen and chosen not in USER_ONLY:
             self.rates.record(chosen, sender, category, approved=True)
