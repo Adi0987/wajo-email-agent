@@ -19,6 +19,7 @@ from agent.senders import other_party
 from eval import enron
 from eval.inbox import USER, build_inbox
 from eval.llm_steps import llm_steps
+from eval.style import BLUE, BOLD, CYAN, DIM, GREEN, RED, YELLOW, badge, level_word, paint
 
 ENRON_ZIP = "enron-email-dataset.zip"
 ACTION_REASON = {Level.SILENT: "safe to do alone", Level.ASK: "leaves the mailbox or can't be undone"}
@@ -53,49 +54,63 @@ class Session:
 
     def run(self) -> None:
         for number, email in enumerate(self.feed, 1):
-            preview = " ".join(email.body.split())[:240]
-            print(f"\n─── Email {number}/{len(self.feed)} · {email.sent_at:%b %d %Y} · from {email.sender}\n"
-                  f"    \"{email.subject}\"\n    {preview}")
+            self.show_email(number, email)
             self.agent.mailbox.receive(email)
             self.agent.on_new_mail(email)
             self.agent.tick(email.sent_at)
             self.show_decisions()
-            if input("\n[enter] next email · q quit: ").strip().lower() == "q":
+            if input(paint("\n  [enter] next email · q quit ", DIM)).strip().lower() == "q":
                 break
-        print("\n" + self.audit.summary())
+        print("\n" + paint("Session summary", BOLD) + "\n" + self.audit.summary())
+
+    def show_email(self, number: int, email: Email) -> None:
+        _, category = other_party(email, self.agent.mailbox)
+        preview = " ".join(email.body.split())[:240]
+        print("\n" + paint(f"━━━ Email {number}/{len(self.feed)} " + "━" * 50, BLUE))
+        print(f"  {paint('From', DIM)}     {paint(email.sender, BOLD)} {paint(f'({category})', DIM)}"
+              f"   {paint(f'{email.sent_at:%b %d %Y %H:%M}', DIM)}")
+        print(f"  {paint('Subject', DIM)}  {paint(email.subject or '(no subject)', BOLD)}")
+        print(f"           {paint(preview, DIM)}")
 
     def show_decisions(self) -> None:
         """Explains each new decision, then asks the user anything the agent needs."""
         while self.log_seen < len(self.agent.executor.log) or self.notices_seen < len(self.agent.notices):
             for entry in self.agent.executor.log[self.log_seen:]:
                 self.log_seen += 1
-                if entry["approved"]:
-                    print(f"    Done: {entry['action'].kind}" if entry["executed"] else "    Not run: changed or no longer allowed")
-                else:
+                if not entry["approved"]:
                     self.explain(entry)
+                elif entry["executed"]:
+                    print(paint(f"  ✔ Done: {entry['action'].kind}", GREEN))
+                else:
+                    print(paint("  ✖ Not run: the action changed or is no longer allowed", RED))
             for notice in self.agent.notices[self.notices_seen:]:
                 self.notices_seen += 1
                 self.answer(notice)
 
     def explain(self, entry: dict) -> None:
-        action, checks = entry["action"], entry["checks"]
+        action, checks, level = entry["action"], entry["checks"], entry["level"]
         email = self.agent.mailbox.get(action.email_id)
         sender, category = other_party(email, self.agent.mailbox)
         rate = self.agent.rates.rate(action.kind, sender, category)
-        target = f" to {', '.join(action.to)}" if action.to else ""
-        print(f"\n    Agent wants to: {action.kind}{target}")
-        print(f"    Why {entry['level'].name}: action {ACTION_REASON[checks['action']]} · "
-              f"email {EMAIL_REASON[checks['email']]} · your approval rate {rate:.0%} "
-              f"(Notify at {NOTIFY_AT:.0%}, Silent at {SILENT_AT:.0%})")
-        if entry["level"] == Level.SILENT:
-            print(f"    Done silently: {action.kind}")
+        target = f" → {', '.join(action.to)}" if action.to else ""
+        print(f"\n  {paint('Agent wants to', DIM)}  {paint(action.kind + target, BOLD)}")
+        print(f"  {paint('Decision', DIM)}        {badge(level)}  {paint('(the most cautious check wins)', DIM)}")
+        rows = [("action", ACTION_REASON[checks["action"]], checks["action"]),
+                ("email", EMAIL_REASON[checks["email"]], checks["email"]),
+                ("learned", f"approval rate {rate:.0%} (Notify ≥{NOTIFY_AT:.0%}, Silent ≥{SILENT_AT:.0%})",
+                 checks["learned"])]
+        for name, reason, allowed in rows:
+            print(f"    {paint(name.ljust(8), DIM)}{reason.ljust(52)} {level_word(allowed)}")
+        if level == Level.SILENT:
+            print(paint(f"  ✔ Done silently: {action.kind}", GREEN))
         self.audit.decision(entry, email, category, self.agent.labels.get(email.id, {}))
 
     def answer(self, notice: Notice) -> None:
         agent, kind = self.agent, notice.kind
         if kind == "ask":
-            answer = input(f"    Allow {notice.action.kind}? [y]es · [n]o · or type the action you want "
-                           f"(keep, archive, label, trash, draft_reply): ").strip().lower()
+            answer = input(paint(f"  ? Allow {notice.action.kind}? ", BOLD, YELLOW)
+                           + paint("[y] yes · [n] no · or type the action you want "
+                                   "(keep, archive, label, trash, draft_reply) ", DIM)).strip().lower()
             if answer in ("", "y", "yes"):
                 agent.approve(notice, notice.at)
                 response = "approved"
@@ -103,21 +118,25 @@ class Session:
                 chosen = None if answer in ("n", "no") else answer
                 agent.reject(notice, chosen=chosen)
                 response = f"rejected, wanted {chosen}" if chosen else "rejected"
+                print(paint(f"  ✖ Rejected{f', noted you wanted {chosen}' if chosen else ''}", RED))
         elif kind == "notify":
-            if input(f"    Did {notice.action.kind}. [enter] fine · [u]ndo: ").strip().lower() == "u":
+            question = paint(f"  ✔ Did {notice.action.kind}. ", CYAN) + paint("[enter] fine · [u] undo ", DIM)
+            if input(question).strip().lower() == "u":
                 agent.undo(notice.action)
                 response = "undone"
+                print(paint("  ↶ Undone", YELLOW))
             else:
                 agent.confirm(notice)
                 response = "confirmed"
         elif kind == "escalate":
-            print("    ESCALATED: suspected injection or phishing. Nothing done.")
+            print(paint("  ⚠ Escalated: suspected injection or phishing. Nothing done.", BOLD, RED))
             response = "escalated"
         else:
             subject = agent.mailbox.get(notice.email_id).subject
-            label = "Follow up? No reply yet to" if kind == "nudge" else "Deadline coming up for"
-            answer = input(f"\n    {label} \"{subject}\". Timing [enter] fine · [e]arly · [l]ate: ").strip().lower()
-            verdict = {"e": "too_early", "l": "too_late"}.get(answer, "ok")
+            label = "No reply yet to" if kind == "nudge" else "Deadline coming up for"
+            question = (paint(f"\n  ⏰ {label} \"{subject}\". ", BOLD, BLUE)
+                        + paint("Timing? [enter] fine · [e] too early · [l] too late ", DIM))
+            verdict = {"e": "too_early", "l": "too_late"}.get(input(question).strip().lower(), "ok")
             agent.timing_feedback(notice, verdict)
             response = f"{kind} timing {verdict.replace('_', ' ')}"
         self.audit.response(notice.email_id, response)
