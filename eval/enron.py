@@ -1,22 +1,21 @@
-"""Loads one person's mail from the Enron dataset.
+"""Picks random emails from one person's Enron inbox, as if they were arriving now.
 
 Reads either the Kaggle zip (one emails.csv: path, raw message) or the CMU maildir folder.
-Paths look like <person>/_sent_mail/1. and <person>/inbox/1.
+Paths look like <person>/inbox/1.
 """
+from collections import Counter
 import csv
 import io
 import random
 import sys
 import zipfile
 from email import message_from_bytes
+from email.parser import BytesHeaderParser
 from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
 from typing import Iterator, Optional
 
 from agent.models import Email
-
-SENT_FOLDERS = ("_sent_mail", "sent_items", "sent")
-
 
 def raw_messages(source: str, person: str) -> Iterator[tuple[str, bytes]]:
     """(folder, raw message) for each of the person's emails."""
@@ -50,18 +49,26 @@ def parse(raw: bytes, email_id: str) -> Optional[Email]:
                  sent_at=sent_at, has_unsubscribe="List-Unsubscribe" in message)
 
 
-def load(source: str, person: str, count: int, seed: int = 0) -> tuple[str, list[Email], list[Email]]:
-    """(user address, the person's sent mail, `count` random inbox emails in date order)."""
-    sent_raw, inbox_raw = [], []
+def sample_inbox(source: str, person: str, count: int) -> tuple[str, list[Email]]:
+    """(the person's address, `count` random inbox emails in date order).
+
+    Streams the dataset once and keeps only the sample (reservoir sampling).
+    """
+    rng = random.Random()
+    picked: list[bytes] = []
+    recipients = Counter()    # the person's own address is the most common recipient
+    seen = 0
     for folder, raw in raw_messages(source, person):
-        if folder in SENT_FOLDERS:
-            sent_raw.append(raw)
-        elif folder == "inbox":
-            inbox_raw.append(raw)
-    sent = [e for i, raw in enumerate(sent_raw) if (e := parse(raw, f"s{i}"))]
-    if not sent:
-        raise SystemExit(f"No sent mail found for {person} in {source}")
-    user = max({e.sender for e in sent}, key=lambda a: sum(e.sender == a for e in sent))
-    picked = random.Random(seed).sample(inbox_raw, min(count, len(inbox_raw)))
-    inbox = [e for i, raw in enumerate(picked) if (e := parse(raw, f"m{i}"))]
-    return user, sent, sorted(inbox, key=lambda e: e.sent_at)
+        if folder != "inbox":
+            continue
+        seen += 1
+        headers = BytesHeaderParser().parsebytes(raw)
+        recipients.update(address.lower() for _, address in getaddresses(headers.get_all("To", [])) if address)
+        if len(picked) < count:
+            picked.append(raw)
+        elif rng.random() < count / seen:
+            picked[rng.randrange(count)] = raw
+    inbox = sorted((e for i, raw in enumerate(picked) if (e := parse(raw, f"m{i}"))), key=lambda e: e.sent_at)
+    if not inbox:
+        raise SystemExit(f"No inbox emails found for {person} in {source}")
+    return recipients.most_common(1)[0][0], inbox

@@ -69,11 +69,19 @@ class TestAgent(unittest.TestCase):
 
     def test_follow_up_after_n_days(self):
         agent = stub_agent(make_mailbox())
+        agent.tick(T0)   # the agent is running when the user sends the email
         agent.mailbox.receive(make_email(id="s1", sender=USER, to=("boss@wajo.ai",)))
         agent.tick(T0 + timedelta(days=2))
         self.assertEqual(agent.notices, [])
         agent.tick(T0 + timedelta(days=3))
         self.assertEqual(agent.notices[0].kind, "nudge")
+
+    def test_no_follow_up_for_mail_sent_before_the_agent_started(self):
+        agent = stub_agent(make_mailbox())
+        agent.mailbox.receive(make_email(id="s1", sender=USER, to=("boss@wajo.ai",), sent_at=T0 - timedelta(days=30)))
+        agent.tick(T0)
+        agent.tick(T0 + timedelta(days=10))
+        self.assertEqual(agent.notices, [])
 
     def test_deadline_reminder_l_days_before(self):
         deadline = T0 + timedelta(days=5)
@@ -86,6 +94,7 @@ class TestAgent(unittest.TestCase):
 
     def test_too_early_nudge_waits_longer(self):
         agent = stub_agent(make_mailbox())
+        agent.tick(T0)   # the agent is running when the user sends the email
         agent.mailbox.receive(make_email(id="s1", sender=USER, to=("boss@wajo.ai",)))
         agent.tick(T0 + timedelta(days=3))
         agent.timing_feedback(agent.notices[0], "too_early")

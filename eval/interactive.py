@@ -1,6 +1,6 @@
 """`python3 wajo.py try`: you are the user. Emails arrive one at a time, the agent decides, you answer.
 
-With enron-email-dataset.zip in the folder: a real Enron inbox, with DeepSeek (needs LLM_API_KEY).
+With enron-email-dataset.zip in the folder: random emails from a real Enron inbox, with DeepSeek (needs LLM_API_KEY).
 Without it, or with --offline: the synthetic inbox and the offline stand-in LLM (no key needed).
 """
 from datetime import datetime
@@ -30,19 +30,19 @@ EMAIL_REASON = {Level.SILENT: "nothing risky", Level.NOTIFY: "involves money",
 def setup(persona: str, count: int, offline: bool) -> tuple[Agent, list[Email]]:
     """The agent and the emails to feed it."""
     if not offline and Path(ENRON_ZIP).exists():
-        print(f"Loading {persona}'s mail from {ENRON_ZIP}...")
-        user, history, feed = enron.load(ENRON_ZIP, persona, count)
+        print(f"Picking {count} random emails from {persona}'s inbox in {ENRON_ZIP}...")
+        user, feed = enron.sample_inbox(ENRON_ZIP, persona, count)
         llm = LLM(cache_path=".llm_cache_local.json")   # keeps these emails out of the eval cache
         propose, classify = Proposer(llm), Classifier(llm)
-        print(f"You are {user}. {len(history)} sent emails loaded as history.")
+        history = []
     else:
         cases = build_inbox(seed=7)
         user, history = USER, [c.email for c in cases if not c.incoming]
         feed = [c.email for c in cases if c.incoming][:count]
         propose, classify = llm_steps("stub", cases, seed=7)
-        print(f"Offline: synthetic inbox, stand-in LLM. You are {user}.")
+    print(f"You are {user}. {len(feed)} emails will arrive one at a time.")
     mailbox = Mailbox(user)
-    for email in history:       # past sent mail: makes contacts, never processed
+    for email in history:       # synthetic inbox only: the user's past mail, so contacts exist
         mailbox.receive(email)
     return Agent(mailbox, propose, classify), feed
 

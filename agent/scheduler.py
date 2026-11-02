@@ -1,5 +1,6 @@
 """Finds follow-ups and deadline reminders that are due."""
 from datetime import datetime, timedelta
+from typing import Optional
 
 from agent.mailbox import Mailbox
 from agent.models import Email
@@ -13,16 +14,18 @@ class Scheduler:
         self.timing = timing
         self.deadlines: dict[str, datetime] = {}   # email id -> deadline
         self.done: set[str] = set()                # ids already nudged or reminded
+        self.started: Optional[datetime] = None    # set on the first tick; older threads are never chased
 
     def add_deadline(self, email_id: str, deadline: datetime) -> None:
         self.deadlines[email_id] = deadline
 
     def due_follow_ups(self, now: datetime) -> list[Email]:
-        """The user's last message in each thread, if unanswered for N days."""
+        """The user's last message in each thread, if sent after the agent started and unanswered for N days."""
+        self.started = self.started or now
         due = []
         for thread_id in {e.thread_id for e in self.mailbox.emails.values()}:
             last = self.mailbox.thread(thread_id)[-1]
-            if last.sender != self.mailbox.user_address or last.id in self.done:
+            if last.sender != self.mailbox.user_address or last.id in self.done or last.sent_at < self.started:
                 continue
             _, category = other_party(last, self.mailbox)
             if now - last.sent_at >= timedelta(days=self.timing.n[category]):

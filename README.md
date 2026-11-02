@@ -12,7 +12,7 @@ python3 wajo.py try
 
 You are the user. Emails arrive one at a time; for each one the agent says what it wants to do, which level it chose (Silent, Notify, Ask, Escalate) and why. You approve, reject, or undo, and it learns. A summary prints at the end, and every decision is saved to `runs/audit_<time>.csv`.
 
-- With `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder, emails come from a real Enron inbox (`--persona kaminski-v`, `--count 20`). This uses DeepSeek: put `LLM_API_KEY=...` in `.env`.
+- With `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder, a random sample of a real Enron inbox arrives one email at a time, different each run (`--persona kaminski-v`, `--count 20`). This uses DeepSeek: put `LLM_API_KEY=...` in `.env`.
 - Without it, or with `--offline`, emails come from the synthetic inbox and no API key is needed.
 
 ## Evaluate it
