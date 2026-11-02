@@ -1,56 +1,41 @@
 # Wajo email agent
 
-A proactive email agent that decides, for each email, whether to act silently, act and notify, ask first, or escalate. It learns from feedback to ask less, and a fixed safety floor caps what learning can unlock.
+A proactive email agent that decides, for each email, whether to act silently, act and notify, ask first, or escalate. It learns from your feedback to ask less, and a fixed safety floor caps what learning can unlock.
 
-- Design decisions: [DESIGN.md](DESIGN.md)
-- Results: [eval/results_deepseek.md](eval/results_deepseek.md), offline worst-case run in [eval/results_stub.md](eval/results_stub.md)
-- Transcripts: [eval/transcripts_deepseek.md](eval/transcripts_deepseek.md)
-- What tests each claim: [eval/COVERAGE.md](eval/COVERAGE.md)
+Python 3.9+, standard library only. Design decisions: [DESIGN.md](DESIGN.md).
 
-Python 3.9+, standard library only.
-
-## Run
+## Try it
 
 ```
-python3 -m unittest discover -s tests -t .   # unit tests
-python3 -m eval.run --llm stub                # eval offline, worst-case stand-in for the LLM
-python3 -m eval.run --llm deepseek            # eval with DeepSeek (LLM_API_KEY in .env)
-python3 -m eval.tune --llm deepseek           # pick rate settings on tuning seeds
-python3 -m eval.transcripts --llm deepseek    # write example transcripts
-python3 run_agent.py                          # type your own emails and answer the agent (DeepSeek)
+python3 wajo.py try
 ```
 
-To try the agent on a real inbox, put the [Enron dataset](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset) zip here (git ignores it), then:
+You are the user. Emails arrive one at a time; for each one the agent says what it wants to do, which level it chose (Silent, Notify, Ask, Escalate) and why. You approve, reject, or undo, and it learns. A summary prints at the end, and every decision is saved to `runs/audit_<time>.csv`.
+
+- With `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder, emails come from a real Enron inbox (`--persona kaminski-v`, `--count 20`). This uses DeepSeek: put `LLM_API_KEY=...` in `.env`.
+- Without it, or with `--offline`, emails come from the synthetic inbox and no API key is needed.
+
+## Evaluate it
 
 ```
-python3 run_agent.py --enron enron-email-dataset.zip --person kaminski-v --count 30
+python3 wajo.py eval
 ```
 
-The CMU `maildir/` folder works too: `--enron maildir`.
+Runs the agent and two baselines (always ask, fixed rules) through 60 simulated days on three inboxes with a simulated user, then prints ask rate, wrong autonomous actions, safety floor violations and attack results. DeepSeek responses are cached in `eval/llm_cache.json`, so this needs no API key. `--llm stub` runs an offline worst case where the proposer follows every attacker.
 
-It acts as that person: their sent mail becomes history (contacts), and a random sample of their inbox arrives one email at a time.
+Saved results: [eval/results_deepseek.md](eval/results_deepseek.md) · [transcripts](eval/transcripts_deepseek.md) · [what tests each claim](eval/COVERAGE.md)
 
-Every decision and your response are saved to `runs/audit_<time>.csv` (one row per decision: proposal, each check's result, final level, classifier flags, your response). A summary prints when the session ends.
+## Other commands
 
-DeepSeek responses are cached in `eval/llm_cache.json`, so the DeepSeek eval reruns without an API key.
+```
+python3 wajo.py test    # unit tests
+python3 wajo.py tune    # re-pick the learning thresholds on separate seeds
+```
 
 ## Layout
 
-| File | Does |
+| Folder | What's in it |
 |---|---|
-| `agent/agent.py` | Background worker: queue in, decisions out, feedback back |
-| `agent/checks.py` | Checks 1 and 2: the safety floor |
-| `agent/flags.py` | Money and injection flags: classifier OR patterns |
-| `agent/rates.py` | Check 3: learned approval rates |
-| `agent/executor.py` | The only code that changes the mailbox; reruns the checks |
-| `agent/approvals.py` | Pending approvals, each bound to one exact action |
-| `agent/scheduler.py`, `agent/timing.py` | Follow-ups and deadline reminders, learned timing |
-| `agent/senders.py` | Sender categories |
-| `agent/proposer.py`, `agent/classifier.py`, `agent/prompts.py`, `agent/llm.py` | LLM steps |
-| `agent/mailbox.py`, `agent/models.py`, `agent/notices.py` | Mock mailbox and shared types |
-| `agent/audit.py` | Audit log of decisions and responses for `run_agent.py` |
-| `eval/inbox.py`, `eval/user.py` | Synthetic inbox with ground truth, simulated user |
-| `eval/simulate.py`, `eval/metrics.py`, `eval/report.py`, `eval/run.py` | Run the eval and report results |
-| `eval/baselines.py`, `eval/stub_llm.py`, `eval/llm_steps.py` | Baselines and LLM setup |
-| `eval/tune.py`, `eval/transcripts.py` | Tuning and example transcripts |
-| `tests/` | Unit tests |
+| `agent/` | The agent. `agent.py` wires it; `checks.py` and `flags.py` are the safety floor; `rates.py` is the learning; `executor.py` is the only code that changes the mailbox. |
+| `eval/` | Synthetic inbox, simulated user, metrics, baselines, tuning, transcripts, the `try` session and the Enron loader. |
+| `tests/` | Unit tests. |

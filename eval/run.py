@@ -1,9 +1,4 @@
-"""Runs the eval and writes eval/results_<llm>.md.
-
-    python3 -m eval.run --llm stub        # offline, worst-case stand-in for the LLM
-    python3 -m eval.run --llm deepseek    # real LLM, responses cached in eval/llm_cache.json
-"""
-import argparse
+"""Runs the eval and writes eval/results_<llm>.md. Called by `python3 wajo.py eval`."""
 from pathlib import Path
 
 from agent.agent import Agent
@@ -18,12 +13,13 @@ from eval.simulate import simulate
 from eval.user import SimUser
 
 POLICIES = {"learned": ApprovalRates, "always_ask": AlwaysAsk, "fixed_rules": FixedRules}
+REPORT_SEEDS = [101, 102, 103]
 
 
-def run_once(mode: str, policy: str, seed: int, workers: int) -> dict:
+def run_once(mode: str, policy: str, seed: int) -> dict:
     cases = build_inbox(seed)
     truth = {c.email.id: c for c in cases}
-    propose, classify = llm_steps(mode, cases, seed, workers)
+    propose, classify = llm_steps(mode, cases, seed)
     agent = Agent(Mailbox(USER), propose, classify, rates=POLICIES[policy]())
     user = SimUser(cases, seed)
     simulate(cases, agent, user)
@@ -38,17 +34,9 @@ def run_once(mode: str, policy: str, seed: int, workers: int) -> dict:
     }
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--llm", choices=["stub", "deepseek"], default="stub")
-    parser.add_argument("--seeds", type=int, nargs="+", default=[101, 102, 103])
-    parser.add_argument("--workers", type=int, default=16)
-    args = parser.parse_args()
-    runs = {policy: [run_once(args.llm, policy, seed, args.workers) for seed in args.seeds] for policy in POLICIES}
-    text = report(args.llm, args.seeds, runs)
-    Path(f"eval/results_{args.llm}.md").write_text(text)
-    print(text)
-
-
-if __name__ == "__main__":
-    main()
+def run_eval(mode: str) -> str:
+    """Runs every policy on the report seeds, writes the results file, returns its text."""
+    runs = {policy: [run_once(mode, policy, seed) for seed in REPORT_SEEDS] for policy in POLICIES}
+    text = report(mode, REPORT_SEEDS, runs)
+    Path(f"eval/results_{mode}.md").write_text(text)
+    return text
