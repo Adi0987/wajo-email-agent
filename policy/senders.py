@@ -1,6 +1,8 @@
 """Sender category, from the exact sender address and authentication result."""
-from agent.mailbox import Mailbox
-from agent.models import Email
+
+from policy.mail_client import MailClient
+from policy.models import Email
+
 
 def domain_of(address: str) -> str:
     """Domain in ASCII form, so Unicode lookalikes don't match real domains."""
@@ -11,7 +13,7 @@ def domain_of(address: str) -> str:
         return "invalid:" + domain
 
 
-def category_of(address: str, authenticated: bool, has_unsubscribe: bool, mailbox: Mailbox) -> str:
+def category_of(address: str, authenticated: bool, has_unsubscribe: bool, mailbox: MailClient) -> str:
     """same_domain, contact, newsletter or unknown."""
     if authenticated and domain_of(address) == mailbox.user_domain:
         return "same_domain"
@@ -22,11 +24,11 @@ def category_of(address: str, authenticated: bool, has_unsubscribe: bool, mailbo
     return "unknown"
 
 
-def sender_category(email: Email, mailbox: Mailbox) -> str:
+def sender_category(email: Email, mailbox: MailClient) -> str:
     return category_of(email.sender, email.authenticated, email.has_unsubscribe, mailbox)
 
 
-def other_party(email: Email, mailbox: Mailbox) -> tuple[str, str]:
+def other_party(email: Email, mailbox: MailClient) -> tuple[str, str]:
     """(address, category) of the person on the other side of the email.
 
     For the user's own sent mail, that is the first recipient.

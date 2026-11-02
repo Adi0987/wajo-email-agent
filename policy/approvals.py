@@ -1,7 +1,8 @@
 """Pending approval requests. An approval covers one exact action."""
+
 import itertools
 
-from agent.models import Action
+from policy.models import Action
 
 
 class Approvals:

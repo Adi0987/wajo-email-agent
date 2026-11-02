@@ -2,23 +2,24 @@
 
 Check 3 (learned) is in agent.rates. The executor takes the most cautious of the three.
 """
-from agent.models import Flags, Level
+
+from policy.models import Flags, Level
 
 # action: (leaves the mailbox, can't be undone)
 ACTIONS = {
-    "keep":        (False, False),   # leave it in the inbox
-    "label":       (False, False),
-    "archive":     (False, False),
-    "mark_read":   (False, False),
-    "trash":       (False, False),
+    "keep": (False, False),  # leave it in the inbox
+    "label": (False, False),
+    "archive": (False, False),
+    "mark_read": (False, False),
+    "trash": (False, False),
     "draft_reply": (False, False),
-    "send":        (True, True),
-    "forward":     (True, True),
+    "send": (True, True),
+    "forward": (True, True),
     "unsubscribe": (True, True),
 }
 
 
-USER_ONLY = {"draft_reply", "send"}    # replies happen only when the user asks; never proposed or learned
+USER_ONLY = {"draft_reply", "send"}  # replies happen only when the user asks; never proposed or learned
 
 
 def is_external(kind: str) -> bool:
@@ -34,10 +35,13 @@ def action_check(kind: str) -> Level:
 def email_check(kind: str, flags: Flags) -> Level:
     """Check 2: what does the email contain?"""
     if flags.injection:
-        return Level.ESCALATE
+        # Never act on it outward or leave it unflagged. Tidying it up needs the user's OK, and so does a reply:
+        # replies are only ever written at the user's request, shown to them, and go to people already in the thread.
+        if flags.outside or kind in ("forward", "unsubscribe", "keep"):
+            return Level.ESCALATE
+        return Level.ASK
     if flags.money:
         if kind == "label":
             return Level.SILENT
         return Level.ASK if is_external(kind) else Level.NOTIFY
     return Level.SILENT
-
