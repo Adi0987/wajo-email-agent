@@ -1,15 +1,17 @@
 """Writes example transcripts from one eval run to eval/transcripts_<llm>.md.
 Called by `python3 wajo.py eval`."""
+
 from pathlib import Path
 
-from agent.agent import Agent
-from agent.mailbox import Mailbox
-from agent.models import Level
+from agent.wajo import Wajo
 from eval.inbox import USER, build_inbox
-from eval.metrics import ATTACK_GROUPS
 from eval.llm_steps import llm_steps
+from eval.metrics import ATTACK_GROUPS
 from eval.simulate import simulate
 from eval.user import SimUser
+from mailsim.server import connect
+from policy.gate import Gate
+from policy.models import Level
 
 SEED = 101
 
@@ -17,32 +19,40 @@ SEED = 101
 def run(mode: str):
     cases = build_inbox(SEED)
     truth = {c.email.id: c for c in cases}
-    propose, classify = llm_steps(mode, cases, SEED)
-    agent = Agent(Mailbox(USER), propose, classify)
+    brain, classify = llm_steps(mode, cases, SEED)
+    server, mail = connect(USER)
+    gate = Gate(mail)
     user = SimUser(cases, SEED)
-    simulate(cases, agent, user)
-    return agent, user, truth
+    simulate(cases, Wajo(gate, brain, classify, talk=False), user, server)
+    return gate, user, truth
 
 
-def describe(entry: dict, agent: Agent, user: SimUser) -> str:
+def describe(entry: dict, gate: Gate, user: SimUser) -> str:
     action, checks = entry["action"], entry["checks"]
-    email = agent.mailbox.get(action.email_id)
+    email = gate.mail.get(action.email_id)
     target = f" to {', '.join(action.to)}" if action.to else ""
-    lines = [f"**{entry['at']:%b %d %H:%M}** · from `{email.sender}` · \"{email.subject}\"", "",
-             f"> {first_sentence(email.body)}", "",
-             f"- Agent proposes: `{action.kind}`{target}",
-             f"- Checks: action {checks['action'].name.title()} · email {checks['email'].name.title()} · "
-             f"learned {checks['learned'].name.title()} → **{entry['level'].name.title()}**"]
+    lines = [
+        f"**{entry['at']:%b %d %H:%M}** · from `{email.sender}` · \"{email.subject}\"",
+        "",
+        f"> {first_sentence(email.body)}",
+        "",
+        f"- Wajo proposes: `{action.kind}`{target}",
+        f"- Checks: action {checks['action'].name.title()} · email {checks['email'].name.title()} · "
+        f"learned {checks['learned'].name.title()} → **{entry['level'].name.title()}**",
+    ]
     responses = [text for at, email_id, text in user.history if email_id == action.email_id and at >= entry["at"]]
     if responses:
         lines.append(f"- User {responses[0]}")
     return "\n".join(lines)
 
 
-def describe_nudge(notice, agent: Agent, user: SimUser) -> str:
-    email = agent.mailbox.get(notice.email_id)
-    lines = [f"**{notice.at:%b %d %H:%M}** · you emailed `{email.to[0]}` · \"{email.subject}\" on {email.sent_at:%b %d}", "",
-             f"- No reply after {(notice.at - email.sent_at).days} days: the agent nudges you (it drafts only if you ask)"]
+def describe_nudge(notice, gate: Gate, user: SimUser) -> str:
+    email = gate.mail.get(notice.email_id)
+    lines = [
+        f'**{notice.at:%b %d %H:%M}** · you emailed `{email.to[0]}` · "{email.subject}" on {email.sent_at:%b %d}',
+        "",
+        f"- No reply after {(notice.at - email.sent_at).days} days: Wajo nudges you (it drafts only if you ask)",
+    ]
     responses = [text for at, email_id, text in user.history if email_id == email.id and at >= notice.at]
     if responses:
         lines.append(f"- User {responses[0]}")
@@ -61,46 +71,71 @@ def first(entries, condition):
 
 def write_transcripts(mode: str) -> str:
     """Picks example moments from one run, writes the transcripts file, returns its path."""
-    agent, user, truth = run(mode)
-    log = [e for e in agent.executor.log if not e["approved"] and e["action"].email_id in truth]
+    gate, user, truth = run(mode)
+    log = [e for e in gate.executor.log if not e["approved"] and e["action"].email_id in truth]
 
     def sender(e):
-        return agent.mailbox.get(e["action"].email_id).sender
+        return gate.mail.get(e["action"].email_id).sender
 
     def same(a, b):
         return sender(a) == sender(b) and a["action"].kind == b["action"].kind
 
     def next_same(entry):
-        return first(log, lambda e: e["at"] > entry["at"] and same(e, entry))
+        return first(
+            log,
+            lambda e: e["at"] > entry["at"]
+            and same(e, entry)
+            and truth[e["action"].email_id].group not in ATTACK_GROUPS,
+        )
 
     learned = first(log, lambda e: e["level"] == Level.SILENT and truth[e["action"].email_id].group == "newsletter")
     cold = first(log, lambda e: e["level"] == Level.ASK and same(e, learned)) if learned else None
     undone_ids = {email_id for _, email_id, text in user.history if "undoes" in text}
-    undos = [e for e in log if e["action"].email_id in undone_ids and e["level"] >= Level.NOTIFY and next_same(e)]
+    undos = [
+        e
+        for e in log
+        if e["action"].email_id in undone_ids
+        and e["level"] >= Level.NOTIFY
+        and e["action"].kind != "keep"
+        and next_same(e)
+    ]
     undo = first(undos, lambda e: next_same(e)["level"] < e["level"]) or (undos[0] if undos else None)
     after_undo = next_same(undo) if undo else None
-    floor = first(log, lambda e: e["checks"]["learned"] > e["level"] and e["checks"]["email"] == e["level"]
-                  and e["level"] == Level.NOTIFY)
-    injection = first(log, lambda e: e["level"] == Level.ESCALATE and truth[e["action"].email_id].group in ATTACK_GROUPS)
-    nudge = first(agent.notices, lambda n: n.kind == "nudge")
+    floor = first(
+        log,
+        lambda e: e["checks"]["learned"] > e["level"]
+        and e["checks"]["email"] == e["level"]
+        and e["level"] == Level.NOTIFY,
+    )
+    injection = first(
+        log, lambda e: e["level"] == Level.ESCALATE and truth[e["action"].email_id].group in ATTACK_GROUPS
+    )
+    nudge = first(gate.notices, lambda n: n.kind == "nudge")
 
     examples = [
         ("Cold start: asks before acting on a newsletter", [cold]),
         ("Learned: the same action for the same sender runs silently", [learned]),
         ("Correction: an undo lowers autonomy for that sender and action", [undo, after_undo]),
         ("Floor: learned Silent, but a money email caps the action at Notify", [floor]),
-        ("Injection: escalated whatever the proposer suggests", [injection]),
-        ("Proactive: unanswered thread, the agent nudges you", [nudge]),
+        ("Injection: escalated whatever Wajo proposes", [injection]),
+        ("Proactive: unanswered thread, Wajo nudges you", [nudge]),
     ]
-    out = [f"# Example transcripts (`--llm {mode}`, seed {SEED})", "",
-           "Generated by `eval/transcripts.py` from the executor's log.", ""]
+    out = [
+        f"# Example transcripts (`--llm {mode}`, seed {SEED})",
+        "",
+        "Generated by `eval/transcripts.py` from the executor's log.",
+        "",
+    ]
     for i, (title, entries) in enumerate(examples, 1):
         out += [f"## {i}. {title}", ""]
         for entry in entries:
             if entry is None:
                 out += ["_No example in this run._", ""]
             else:
-                out += [describe_nudge(entry, agent, user) if title.startswith("Proactive") else describe(entry, agent, user), ""]
+                out += [
+                    describe_nudge(entry, gate, user) if title.startswith("Proactive") else describe(entry, gate, user),
+                    "",
+                ]
     path = f"eval/transcripts_{mode}.md"
     Path(path).write_text("\n".join(out))
     return path

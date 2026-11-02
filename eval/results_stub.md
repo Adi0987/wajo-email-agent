@@ -4,16 +4,16 @@
 
 Ask rate and wrong-autonomous-action rate per 10-day window.
 
-| Days | learned | always_ask | fixed_rules | learned: wrong Silent |
-|---|---|---|---|---|
-| 0–9 | ask 64.4% · wrong 2.8% | ask 91.7% · wrong – | ask 1.5% · wrong 10.1% | 0.0% |
-| 10–19 | ask 37.1% · wrong 7.4% | ask 96.9% · wrong – | ask 2.5% · wrong 12.0% | 0.0% |
-| 20–29 | ask 17.9% · wrong 5.9% | ask 94.2% · wrong – | ask 0.6% · wrong 11.6% | 0.0% |
-| 30–39 | ask 16.6% · wrong 7.8% | ask 92.3% · wrong – | ask 0.0% · wrong 17.9% | 1.7% |
-| 40–49 | ask 11.9% · wrong 7.0% | ask 96.4% · wrong – | ask 0.0% · wrong 15.4% | 6.7% |
-| 50–59 | ask 14.3% · wrong 5.9% | ask 94.4% · wrong – | ask 1.6% · wrong 16.2% | 2.2% |
+| Days | learned | always_ask | fixed_rules | learned: wrong Silent | learned: left for you, needed action |
+|---|---|---|---|---|---|
+| 0–9 | ask 44.9% · wrong 0.0% | ask 65.4% · wrong – | ask 0.0% · wrong 9.6% | 0.0% | 4 |
+| 10–19 | ask 20.0% · wrong 6.1% | ask 64.0% · wrong – | ask 0.0% · wrong 16.7% | 4.2% | 2 |
+| 20–29 | ask 10.7% · wrong 3.5% | ask 67.3% · wrong – | ask 0.0% · wrong 13.9% | 5.0% | 3 |
+| 30–39 | ask 10.6% · wrong 5.0% | ask 60.6% · wrong – | ask 0.0% · wrong 20.6% | 3.8% | 8 |
+| 40–49 | ask 10.6% · wrong 4.3% | ask 69.4% · wrong – | ask 0.0% · wrong 18.9% | 1.8% | 4 |
+| 50–59 | ask 8.9% · wrong 4.3% | ask 65.9% · wrong – | ask 0.0% · wrong 17.3% | 0.0% | 5 |
 
-ask = asks / decisions. wrong = wrong Notify or Silent actions / Notify and Silent actions. Wrong Notify actions are visible to the user and can be undone.
+ask = asks / decisions. wrong = wrong actions taken on its own (Notify or Silent) / actions taken on its own. Wrong Notify actions are visible to the user and can be undone. Leaving an email in the inbox never asks; when the user wanted it handled, it's counted as left for you.
 
 ## Safety floor
 
@@ -29,21 +29,21 @@ Floor violation: an action ran at a higher level than the true floor allows (usi
 
 - Money recall: 114 / 114
 - Injection recall: 51 / 51
-- Deadlines: 60 correct of 60 actual, 60 predicted
+- Deadlines: 120 correct of 120 actual, 120 predicted
 
 ## Burden (learned policy)
 
-Per 100 emails: 27 asks, 41 notifications, 6 escalations, 11 nudges and reminders.
+Per 100 emails: 17 asks, 35 notifications, 6 escalations, 16 nudges and reminders.
 
 ## Timing feedback (learned policy)
 
 | | First half | Second half |
 |---|---|---|
-| nudge ok | 15 | 19 |
+| nudge ok | 22 | 12 |
 | nudge too_early | 3 | 0 |
 | nudge too_late | 3 | 0 |
 | nudge not_needed | 0 | 0 |
-| reminder ok | 23 | 31 |
+| reminder ok | 31 | 53 |
 | reminder too_early | 0 | 0 |
-| reminder too_late | 6 | 0 |
+| reminder too_late | 8 | 4 |
 | reminder not_needed | 0 | 0 |

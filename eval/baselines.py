@@ -1,25 +1,34 @@
 """Baselines that replace learning. Checks 1 and 2 still apply."""
-from agent.models import Level
+
+from policy.models import Level
 
 
-class AlwaysAsk:
+class NoLearning:
+    """Records nothing, so nothing is ever learned."""
+
+    by_sender: dict = {}
+    by_kind: dict = {}
+
     def record(self, *args, **kwargs) -> None:
         pass
 
-    def usual_choice(self, sender: str, category: str) -> None:
+    def rate(self, *args) -> float:
+        return 0.0
+
+    def usual_choice(self, sender: str, email_kind: str) -> None:
         return None
 
-    def level(self, kind: str, sender: str, category: str) -> Level:
+    def declined(self, *args) -> bool:
+        return False
+
+
+class AlwaysAsk(NoLearning):
+    def level(self, action: str, sender: str, email_kind: str) -> Level:
         return Level.ASK
 
 
-class FixedRules:
-    """Silent for newsletters, Notify for everything else. Never learns."""
-    def record(self, *args, **kwargs) -> None:
-        pass
+class FixedRules(NoLearning):
+    """Silent for newsletters, Notify for everything else."""
 
-    def usual_choice(self, sender: str, category: str) -> None:
-        return None
-
-    def level(self, kind: str, sender: str, category: str) -> Level:
-        return Level.SILENT if category == "newsletter" else Level.NOTIFY
+    def level(self, action: str, sender: str, email_kind: str) -> Level:
+        return Level.SILENT if email_kind == "newsletter" else Level.NOTIFY
