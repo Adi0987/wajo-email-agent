@@ -1,8 +1,9 @@
 """Terminal colors for `wajo.py try`. Off when output isn't a terminal or NO_COLOR is set."""
+
 import os
 import sys
 
-from agent.models import Level
+from policy.models import Level
 
 ON = sys.stdout.isatty() and "NO_COLOR" not in os.environ
 BOLD, DIM, REVERSE = "1", "2", "7"

@@ -1,65 +1,47 @@
-"""Builds the agent and the emails to feed it, for `ui` and `try`.
+"""Builds a session for `ui` and `try`: the mail server, Wajo, and where new emails come from.
 
-Emails come from a random sample of a real Enron inbox (needs enron-email-dataset.zip here)
-or from the synthetic inbox. Decisions come from DeepSeek (needs LLM_API_KEY) or from a
-rule-based stand-in that needs no key.
+The user is user@example.com. New emails are written by the LLM when the user asks for one (needs LLM_API_KEY in .env);
+without a key, they come from the synthetic test inbox and Wajo runs on simple rules.
 """
-import os
+
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
 
-from agent.agent import Agent
-from agent.classifier import Classifier
-from agent.llm import LLM, load_env
-from agent.mailbox import Mailbox
-from agent.models import Email
-from agent.profile import Profile
-from agent.proposer import Proposer
-from app import enron, offline_llm
+from agent.brain import LLMBrain, OfflineBrain
+from agent.classifier import Classifier, offline_classify
+from agent.llm import LLM, settings
+from agent.wajo import Wajo
+from app.audit import AuditLog
 from eval.inbox import USER, build_inbox
-
-ENRON_ZIP = "enron-email-dataset.zip"
+from mailsim.generator import EmailGenerator
+from mailsim.server import MailServer, connect
+from policy.gate import Gate
 
 
 def available() -> dict:
-    load_env()
-    return {"enron": Path(ENRON_ZIP).exists(), "deepseek": bool(os.environ.get("LLM_API_KEY"))}
+    return {"llm": bool(settings()["key"])}
 
 
 def defaults() -> dict:
-    """The best session this machine can run."""
-    have = available()
-    return {"source": "enron" if have["enron"] else "synthetic", "persona": "kaminski-v", "count": 200,
-            "llm": "deepseek" if have["deepseek"] else "offline"}
+    return {"llm": "llm" if available()["llm"] else "offline"}
 
 
 @dataclass
 class Session:
-    agent: Agent
-    feed: list[Email]          # emails to deliver, in order
-    llm: Optional[LLM]         # None: offline stand-in
-    profile: Profile           # what the user tells the agent; lives only in this session
+    server: MailServer  # the simulated mail server (the inbox the user sees)
+    wajo: Wajo  # reaches it only through MCP tool calls, via the gate
+    emails: EmailGenerator  # the outside world: new mail when the user asks for it
     description: str
 
 
-def build(source: str, persona: str, count: int, llm_choice: str) -> Session:
-    if source == "enron":
-        user, feed = enron.sample_inbox(ENRON_ZIP, persona, count)
-        mailbox = Mailbox(user)
-        where = f"{len(feed)} random emails from {persona}'s Enron inbox"
-    else:
-        cases = build_inbox(seed=7)
-        mailbox = Mailbox(USER)
-        for case in cases:
-            if not case.incoming:
-                mailbox.receive(case.email)    # the user's past mail, so contacts exist
-        feed = [c.email for c in cases if c.incoming][:count]
-        where = f"{len(feed)} emails from the synthetic inbox"
-    profile = Profile()
-    if llm_choice == "deepseek":
-        llm = LLM(cache_path=None)    # in memory only: nothing about this session touches the disk
-        agent = Agent(mailbox, Proposer(llm, profile), Classifier(llm))
-        return Session(agent, feed, llm, profile, f"{where} · DeepSeek")
-    agent = Agent(mailbox, offline_llm.propose, offline_llm.classify)
-    return Session(agent, feed, None, profile, f"{where} · offline stand-in (no API key)")
+def build(llm_choice: str) -> Session:
+    server, mailbox = connect(USER)
+    gate = Gate(mailbox)
+    if llm_choice == "llm":
+        llm = LLM(cache_path=None)  # in memory only: nothing about this session touches the disk
+        wajo = Wajo(gate, LLMBrain(llm), Classifier(llm), audit=AuditLog())
+        return Session(server, wajo, EmailGenerator(llm, []), f"new emails and decisions by {llm.config['model']}")
+    test_inbox = [c.email for c in build_inbox(seed=7) if c.incoming]
+    wajo = Wajo(gate, OfflineBrain(), offline_classify, audit=AuditLog())
+    return Session(
+        server, wajo, EmailGenerator(None, test_inbox), "synthetic test inbox · offline stand-in (no API key)"
+    )

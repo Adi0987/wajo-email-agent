@@ -37,6 +37,10 @@
   .bubble { max-width: 78%; padding: 9px 13px; border-radius: 18px; background: var(--them); white-space: pre-wrap; }
   .row.me .bubble { background: var(--me); color: var(--me-ink); border-bottom-right-radius: 6px; }
   .row.them .bubble { border-bottom-left-radius: 6px; }
+  .arrived { text-align: center; font-size: 12px; color: var(--muted); margin: 18px 0 6px; }
+  .arrived a { color: var(--muted); cursor: pointer; text-decoration: underline; }
+  .time { font-size: 11px; color: var(--muted); margin: 2px 8px 0; }
+  .time.me { text-align: right; }
   .about { font-size: 12px; color: var(--muted); margin: 14px 0 2px 6px; }
   .about a { color: var(--muted); cursor: pointer; text-decoration: underline; }
   .body { margin: 4px 0 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
@@ -129,22 +133,11 @@
 
   <form method="dialog" id="session-form" data-pane="session">
     <div class="meta">Starting a new session resets what the assistant has learned.</div>
-    <label>Emails come from</label>
-    <div class="option" id="opt-enron"><input type="radio" name="source" value="enron">
-      <div>A real Enron inbox<small>Random emails, acting as this person. Needs enron-email-dataset.zip in the project folder.</small></div></div>
-    <div class="option"><input type="radio" name="source" value="synthetic">
-      <div>The synthetic test inbox<small>Newsletters, colleagues, invoices, deadlines and attacks.</small></div></div>
-    <div class="row">
-      <div><label>Enron person</label><input type="text" name="persona" list="personas"></div>
-      <div><label>Emails in the sample</label><input type="number" name="count" min="1" max="1000"></div>
-    </div>
-    <datalist id="personas"><option value="kaminski-v"><option value="skilling-j"><option value="lay-k">
-      <option value="dasovich-j"><option value="kean-s"><option value="jones-t"><option value="mann-k"><option value="beck-s"></datalist>
-    <label>Decisions made by</label>
-    <div class="option" id="opt-deepseek"><input type="radio" name="llm" value="deepseek">
-      <div>DeepSeek<small>Needs LLM_API_KEY in .env.</small></div></div>
+    <label>Run with</label>
+    <div class="option" id="opt-llm"><input type="radio" name="llm" value="llm">
+      <div>Your LLM<small>Wajo's decisions and new emails come from the model set in .env (see README).</small></div></div>
     <div class="option"><input type="radio" name="llm" value="offline">
-      <div>Offline stand-in<small>Simple rules, no API key. Good for trying the safety checks.</small></div></div>
+      <div>Offline stand-in<small>Simple rules and the built-in test inbox, no API key. Good for trying the safety checks.</small></div></div>
     <div class="actions" style="justify-content:flex-end">
       <button value="cancel" formnovalidate>Cancel</button>
       <button class="primary" value="session">Start new session</button>
@@ -191,7 +184,7 @@ const QUICK = {ask: [["yes", "Yes"], ["no", "No"]], notify: [["yes", "Looks good
 QUICK.reminder = QUICK.nudge;
 const FOOT = {ask: "asked first", notify: "did it, told you", silent: "did it quietly", escalate: "escalated",
               nudge: "follow-up", reminder: "reminder", remind_me: "the reminder you asked for"};
-const SECTIONS = ["Waiting on you", "Inbox", "Drafts ready", "Archived", "Trash"];
+const SECTIONS = ["Waiting on you", "Inbox", "Drafts ready", "Sent", "Archived", "Trash"];
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 let state = null, busy = false, user = "", side = "inbox";
@@ -209,10 +202,13 @@ async function call(path, body) {
 const openQuestion = () => state && [...state.messages].reverse().find((m) => m.open);
 
 function message(m) {
-  if (m.kind === "email") return "";                       // the thread shows the email inside Wajo's message
+  if (m.kind === "email") return `<div class="arrived">${esc(m.date)} · New email from <b>${esc(m.name)}</b> · ${esc(m.subject)} ·
+      <a data-show="e${m.id}">${expanded.has("e" + m.id) ? "hide" : "show"}</a></div>
+      ${expanded.has("e" + m.id) ? `<div class="body">From ${esc(m.sender)} (${esc(m.category)}) · ${esc(m.date)}\n\n${esc(m.body)}</div>` : ""}`;
   if (m.kind === "result") return `<div class="done">✔ ${esc(m.text)}</div>`;
-  if (m.kind === "note") return `<div class="row them"><div class="bubble">${esc(m.text)}</div></div>`;
-  if (m.kind === "user") return `<div class="row me"><div class="bubble">${esc(m.text)}</div></div>`;
+  const time = m.at ? `<div class="time ${m.kind === "user" ? "me" : ""}">${esc(m.at)}</div>` : "";
+  if (m.kind === "note") return `<div class="row them"><div class="bubble">${esc(m.text)}</div></div>${time}`;
+  if (m.kind === "user") return `<div class="row me"><div class="bubble">${esc(m.text)}</div></div>${time}`;
   const a = m.about;
   const head = a ? `<div class="about">${esc(a.name)} · ${esc(a.subject)} · <a data-show="${m.id}">${expanded.has(m.id) ? "hide" : "show"} email</a></div>
                    ${expanded.has(m.id) ? `<div class="body">From ${esc(a.sender)} (${esc(a.category)}) · ${esc(a.date)}\n\n${esc(a.body)}</div>` : ""}` : "";
@@ -221,7 +217,7 @@ function message(m) {
        · ${esc(m.details.rate)}. The most cautious of the three wins.</div>` : "";
   return `${head}<div class="row them k-${m.kind}"><div class="bubble">${esc(m.text)}</div></div>
     ${m.draft ? `<div class="draft">${esc(m.draft)}</div>` : ""}
-    <div class="foot k-${m.kind}"><span class="dot"></span>${FOOT[m.kind]}${m.details ? ` · <a data-why="${m.id}">why?</a>` : ""}</div>
+    <div class="foot k-${m.kind}"><span class="dot"></span>${FOOT[m.kind]}${m.at ? ` · ${esc(m.at)}` : ""}${m.details ? ` · <a data-why="${m.id}">why?</a>` : ""}</div>
     ${why}`;
 }
 
@@ -232,7 +228,7 @@ function inbox() {
     if (!mails.length) return "";
     return `<div class="section"><h4>${name} <span>${mails.length}</span></h4>${mails.map((e) =>
       `<div class="mail"><span class="s">${esc(e.subject)}${e.labels.map((l) => `<span class="tag">${esc(l)}</span>`).join("")}</span>
-       <span class="f">${esc(e.sender)}</span></div>`).join("")}</div>`;
+       <span class="f">${esc(e.sender)} · ${esc(e.date)}</span></div>`).join("")}</div>`;
   }).join("");
 }
 
@@ -256,11 +252,12 @@ function diagnostics() {
       <textarea id="profile" rows="4" placeholder="Nothing yet. One note per line, e.g. &quot;Conference invites are noise unless I'm speaking&quot;">${esc(state.profile.join("\n"))}</textarea>
       <div class="meta">I read all of this before suggesting anything. It shapes suggestions only; the safety checks never use it.
         <button id="save-profile" style="float:right;padding:2px 10px;font-size:12px">Save</button></div></div>
-    <div class="section"><h4>Learned, per sender</h4>${table(prefs.senders,
-      [["who", "Sender"], ["action", "Action"], ["approved", "✓"], ["rejected", "✗"], ["level", "Now"]])}</div>
-    <div class="section"><h4>Learned, per kind of sender</h4>${table(prefs.groups,
+    <div class="section"><h4>Learned, per kind of email</h4>${table(prefs.groups,
       [["who", "Kind"], ["action", "Action"], ["approved", "✓"], ["rejected", "✗"], ["rate", "Rate"]])}
-      <div class="meta">A sender's first email always asks. After that, its kind's record helps until it has its own.</div></div>
+      <div class="meta">This is what lets me act on a new sender's first email. Rate ≥60% → I act and tell you; ≥80% → I act quietly.</div></div>
+    <div class="section"><h4>Learned, per sender</h4>${table(prefs.senders,
+      [["who", "Sender"], ["action", "Action"], ["approved", "✓"], ["rejected", "✗"]])}
+      <div class="meta">A sender's own record takes over as it builds up.</div></div>
     <div class="section"><h4>Learned timing</h4>${table(state.timing,
       [["who", "Kind"], ["follow_up", "Follow up after"], ["reminder", "Remind"]])}</div>
     <div class="section"><h4>Scheduled</h4>${table(state.scheduled, [["at", "When"], ["what", "What"]])}</div>
@@ -274,8 +271,8 @@ function render() {
   if (!state) return;
   user = state.user;
   $("source").textContent = state.clock;
-  $("next").textContent = busy ? "Working…" : state.remaining ? "Sample New Email Into Inbox" : "Sample used up: start a new session in Admin";
-  $("next").disabled = busy || !state.remaining;
+  $("next").textContent = busy ? "Working…" : "Sample New Email Into Inbox";
+  $("next").disabled = busy;
   $("wait").disabled = $("admin").disabled = busy;
   $("thread").innerHTML = state.messages.map(message).join("")
     + (busy ? `<div class="row them"><div class="bubble typing">Wajo is typing…</div></div>` : "")
@@ -308,7 +305,7 @@ document.addEventListener("click", (event) => {
   if (t.dataset.quick) answer(t.dataset.quick);
   for (const key of ["show", "why"]) {
     if (t.dataset[key]) {
-      const id = key === "show" ? Number(t.dataset.show) : "why" + t.dataset.why;
+      const id = key === "show" ? (t.dataset.show.startsWith("e") ? t.dataset.show : Number(t.dataset.show)) : "why" + t.dataset.why;
       expanded.has(id) ? expanded.delete(id) : expanded.add(id);
       render();
     }
@@ -321,13 +318,12 @@ document.addEventListener("click", (event) => {
     $("side-diagnostics").hidden = side !== "diagnostics";
   }
 });
-$("next").onclick = () => call("/api/next", {});
+$("next").onclick = async () => { await call("/api/next", {}); await call("/api/process", {}); };
 $("wait").onclick = () => call("/api/wait", {days: 1});
 $("admin").onclick = () => {
   const form = $("session-form"), s = state.settings, have = state.available;
-  form.source.value = s.source; form.persona.value = s.persona; form.count.value = s.count; form.llm.value = s.llm;
-  form.querySelector('[value="enron"]').disabled = !have.enron; $("opt-enron").classList.toggle("off", !have.enron);
-  form.querySelector('[value="deepseek"]').disabled = !have.deepseek; $("opt-deepseek").classList.toggle("off", !have.deepseek);
+  form.llm.value = s.llm;
+  form.querySelector('[value="llm"]').disabled = !have.llm; $("opt-llm").classList.toggle("off", !have.llm);
   $("admin-panel").showModal();
 };
 document.querySelectorAll("[data-tab]").forEach((tab) => tab.onclick = () => {
@@ -347,12 +343,12 @@ $("admin-panel").addEventListener("close", async () => {
   const choice = $("admin-panel").returnValue;
   if (choice === "session") {
     const form = $("session-form");
-    await call("/api/session", {source: form.source.value, persona: form.persona.value.trim(),
-                                count: form.count.value, llm: form.llm.value});
+    await call("/api/session", {llm: form.llm.value});
   } else if (choice === "plant") {
     const form = $("plant-form");
     await call("/api/plant", {sender: form.sender.value, subject: form.subject.value, body: form.body.value, to: form.to.value,
       authenticated: form.authenticated.checked, newsletter: form.newsletter.checked, from_me: form.from_me.checked});
+    await call("/api/process", {});
     
   }
 });
