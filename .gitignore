@@ -1,9 +1,7 @@
 .env
 __pycache__/
 .venv/
-.llm_cache_local.json
 maildir/
 enron_mail_*.tar.gz
-runs/
 enron-email-dataset.zip
 emails.csv

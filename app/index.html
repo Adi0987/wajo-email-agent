@@ -76,6 +76,8 @@
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th { text-align: left; color: var(--muted); font-weight: 500; padding: 3px 4px; border-bottom: 1px solid var(--line); }
   td { padding: 4px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  aside textarea { width: 100%; font: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 8px;
+                   padding: 7px 9px; background: var(--panel); color: var(--ink); resize: vertical; }
 
   dialog { border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: min(560px, 92vw); background: var(--panel); color: var(--ink); }
   dialog::backdrop { background: rgba(0,0,0,.35); }
@@ -207,6 +209,7 @@ function message(m) {
   if (m.kind === "email") return "";                       // the thread shows the email inside Wajo's message
   if (m.kind === "result") return `<div class="done">✔ ${esc(m.text)}</div>`;
   if (m.kind === "note") return `<div class="row them"><div class="bubble">${esc(m.text)}</div></div>`;
+  if (m.kind === "user") return `<div class="row me"><div class="bubble">${esc(m.text)}</div></div>`;
   const a = m.about;
   const head = a ? `<div class="about">${esc(a.name)} · ${esc(a.subject)} · <a data-show="${m.id}">${expanded.has(m.id) ? "hide" : "show"} email</a></div>
                    ${expanded.has(m.id) ? `<div class="body">From ${esc(a.sender)} (${esc(a.category)}) · ${esc(a.date)}\n\n${esc(a.body)}</div>` : ""}` : "";
@@ -247,6 +250,10 @@ function diagnostics() {
           ["Did quietly", count("silent")], ["Escalated", count("escalate")], ["Ask rate, 1st half", rate(kinds.slice(0, half))],
           ["Ask rate, 2nd half", rate(kinds.slice(half))]]
       .map(([label, value]) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`).join("")}</div></div>
+    <div class="section"><h4>What I know about you</h4>
+      <textarea id="profile" rows="4" placeholder="Nothing yet. One note per line, e.g. &quot;Conference invites are noise unless I'm speaking&quot;">${esc(state.profile.join("\n"))}</textarea>
+      <div class="meta">I read all of this before suggesting anything. It shapes suggestions only; the safety checks never use it.
+        <button id="save-profile" style="float:right;padding:2px 10px;font-size:12px">Save</button></div></div>
     <div class="section"><h4>Learned, per sender</h4>${table(prefs.senders,
       [["who", "Sender"], ["action", "Action"], ["approved", "✓"], ["rejected", "✗"], ["level", "Now"]])}</div>
     <div class="section"><h4>Learned, per kind of sender</h4>${table(prefs.groups,
@@ -256,7 +263,9 @@ function diagnostics() {
       [["who", "Kind"], ["follow_up", "Follow up after"], ["reminder", "Remind"]])}</div>
     <div class="section"><h4>Scheduled</h4>${table(state.scheduled, [["at", "When"], ["what", "What"]])}</div>
     <div class="section"><h4>Session</h4><p class="meta">Acting as ${esc(state.user)}. ${esc(state.source)}.</p>
-      <p class="meta">Every decision, each check's result and your response are logged to ${esc(state.audit)}.</p></div>`;
+      <p class="meta">Everything in this session (emails, what I've learned, what you've told me, the audit log)
+        lives in memory only and disappears when the app stops. Nothing is written to disk.</p>
+      <p class="meta"><a href="/api/audit.csv">Download the audit log</a> (every decision, each check's result, your response).</p></div>`;
 }
 
 function render() {
@@ -271,17 +280,19 @@ function render() {
   const open = openQuestion();
   $("quick").innerHTML = open ? QUICK[open.kind].map(([value, label], i) =>
       `<button ${i ? "" : 'class="primary"'} data-quick="${esc(value)}">${label}</button>`).join("")
-    : `<span class="hint">${busy ? "Wajo is thinking…" : "Nothing to answer right now."}</span>`;
-  $("reply").placeholder = open ? "Reply in your own words, e.g. \"no, label it research\"" : "Sample a new email to continue";
-  $("reply").disabled = $("send").disabled = busy || !open;
+    : `<span class="hint">${busy ? "Wajo is thinking…" : "Nothing to answer right now. Anything you tell me goes into what I know about you."}</span>`;
+  $("reply").placeholder = open ? "Reply in your own words, e.g. \"no, label it research\""
+                                : "Tell me something about how you work, e.g. \"I run the research group\"";
+  $("reply").disabled = $("send").disabled = busy;
   document.querySelectorAll("[data-quick]").forEach((b) => b.disabled = busy);
   $("side-inbox").innerHTML = inbox();
-  $("side-diagnostics").innerHTML = diagnostics();
+  if (document.activeElement !== $("profile")) $("side-diagnostics").innerHTML = diagnostics();
 }
 
 function answer(text) {
   const open = openQuestion();
   if (open) call("/api/answer", {id: open.id, reply: text});
+  else if (text) call("/api/tell", {text});
 }
 $("compose").onsubmit = (event) => {
   event.preventDefault();
@@ -299,6 +310,7 @@ document.addEventListener("click", (event) => {
       render();
     }
   }
+  if (t.id === "save-profile") call("/api/profile", {text: $("profile").value});
   if (t.dataset.side) {
     side = t.dataset.side;
     document.querySelectorAll("[data-side]").forEach((b) => b.classList.toggle("on", b === t));

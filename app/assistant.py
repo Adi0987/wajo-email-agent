@@ -12,6 +12,7 @@ from agent.audit import AuditLog
 from agent.llm import LLM
 from agent.models import Action, Email, Level
 from agent.notices import Notice
+from agent.profile import Profile
 from agent.rates import NOTIFY_AT, SILENT_AT
 from agent.senders import other_party
 from app.interpreter import Interpreter
@@ -33,8 +34,8 @@ def times(count: float) -> str:
 
 
 class Assistant:
-    def __init__(self, agent: Agent, llm: Optional[LLM], audit: AuditLog):
-        self.agent, self.audit = agent, audit
+    def __init__(self, agent: Agent, llm: Optional[LLM], profile: Profile, audit: AuditLog):
+        self.agent, self.audit, self.profile = agent, audit, profile
         self.narrator, self.interpreter = Narrator(llm), Interpreter(llm)
         self.messages: list[dict] = []
         self.clock: Optional[datetime] = None
@@ -90,12 +91,21 @@ class Assistant:
             self.agent.timing_feedback(notice, verdict)
             self.audit.response(notice.email_id, f"{notice.kind} timing {verdict.replace('_', ' ')}")
         new = []
+        if result.get("remember"):
+            self.profile.add(result["remember"])
+            new.append(self.note(f"I'll remember that: {result['remember']}"))
         acknowledgement = result["acknowledgement"] or self._acknowledge(notice, agreed, instead)
         if acknowledgement:
             new.append(self.note(acknowledgement))
         if instead:
             self.agent.do_instead(instead, self.clock)
         return new + self._step()
+
+    def tell(self, text: str) -> list[dict]:
+        """Something the user tells the agent about themselves, outside any question."""
+        self._add("user", text=text)
+        self.profile.add(text)
+        return [self.note("Got it. I'll keep that in mind when I suggest what to do.")]
 
     def waiting(self) -> set[str]:
         """Email ids with a question the user hasn't answered yet."""

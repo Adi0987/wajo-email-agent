@@ -1,7 +1,6 @@
 """`python3 wajo.py try`: the assistant in your terminal. Emails arrive one at a time; reply in your own words."""
 import textwrap
 from collections import deque
-from datetime import datetime
 
 from agent.audit import AuditLog
 from app.assistant import Assistant
@@ -36,18 +35,22 @@ def show(message: dict, details: bool) -> None:
 
 def run(settings: dict, details: bool) -> None:
     s = {**defaults(), **settings}
-    agent, feed, llm, source = build(s["source"], s["persona"], s["count"], s["llm"])
-    assistant = Assistant(agent, llm, AuditLog(f"runs/audit_{datetime.now():%Y%m%d_%H%M%S}.csv"))
-    print(paint("\nHi, I'm Wajo, your email assistant. ", BOLD) + f"Here come {source}. "
+    session = build(s["source"], s["persona"], s["count"], s["llm"])
+    assistant = Assistant(session.agent, session.llm, session.profile, AuditLog())
+    print(paint("\nHi, I'm Wajo, your email assistant. ", BOLD) + f"Here come {session.description}. "
           "Reply in your own words, like \"yes\", \"archive it instead\" or \"label it research\". Enter means yes.")
-    for number, email in enumerate(feed, 1):
-        print(paint(f"\n[{number}/{len(feed)}]", DIM), end="")
+    for number, email in enumerate(session.feed, 1):
+        print(paint(f"\n[{number}/{len(session.feed)}]", DIM), end="")
         queue = deque(assistant.deliver(email))
         while queue:
             message = queue.popleft()
             show(message, details)
             if message["open"]:
                 queue.extend(assistant.answer(message["id"], input(paint("  you › ", BOLD))))
-        if input(paint("\n  [enter] next email · q quit ", DIM)).strip().lower() == "q":
+        command = input(paint("\n  [enter] next email · q quit · or tell me something about how you work ", DIM)).strip()
+        if command.lower() == "q":
             break
+        if command:
+            for message in assistant.tell(command):
+                show(message, details)
     print("\n" + paint("Session summary", BOLD) + "\n" + assistant.audit.summary())

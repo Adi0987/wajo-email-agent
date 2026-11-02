@@ -1,10 +1,10 @@
-"""Records every decision and the user's response, for review after a session.
+"""Records every decision and the user's response, for review during a session.
 
-One CSV row per decision, saved after every change so nothing is lost on quit.
+Kept in memory only: nothing is written to disk. The page offers it as a CSV download.
 """
 import csv
+import io
 from collections import Counter
-from pathlib import Path
 
 from agent.models import Email, Level
 
@@ -14,8 +14,7 @@ FIELDS = ["time", "email_id", "from", "category", "subject", "proposed", "to",
 
 
 class AuditLog:
-    def __init__(self, path: str):
-        self.path = Path(path)
+    def __init__(self):
         self.rows: list[dict] = []
 
     def decision(self, entry: dict, email: Email, category: str, labels: dict) -> None:
@@ -28,7 +27,6 @@ class AuditLog:
             "classifier_money": labels.get("money", False), "classifier_injection": labels.get("injection", False),
             "user_response": "",
         })
-        self.save()
 
     def response(self, email_id: str, text: str) -> None:
         """Attach the user's response to the latest decision on this email."""
@@ -36,14 +34,13 @@ class AuditLog:
             if row["email_id"] == email_id:
                 row["user_response"] = f"{row['user_response']}; {text}" if row["user_response"] else text
                 break
-        self.save()
 
-    def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=FIELDS)
-            writer.writeheader()
-            writer.writerows(self.rows)
+    def csv_text(self) -> str:
+        out = io.StringIO()
+        writer = csv.DictWriter(out, fieldnames=FIELDS)
+        writer.writeheader()
+        writer.writerows(self.rows)
+        return out.getvalue()
 
     def summary(self) -> str:
         if not self.rows:
@@ -59,5 +56,4 @@ class AuditLog:
             f"Decisions: {len(self.rows)}  ·  " + "  ".join(f"{level.name}: {levels[level.name]}" for level in Level),
             f"Ask rate: first half {ask_rate(self.rows[:half])}, second half {ask_rate(self.rows[half:])}",
             "Your responses: " + ", ".join(f"{text} {n}" for text, n in responses.most_common()),
-            f"Full log: {self.path}",
         ])

@@ -31,6 +31,21 @@ class TestLLMSteps(unittest.TestCase):
         Proposer(llm)(make_email(), make_mailbox(), usual="archive")
         self.assertIn("usually chooses: archive", llm.system)
 
+    def test_profile_goes_in_prompt(self):
+        from agent.profile import Profile
+        profile = Profile()
+        profile.add("I run the research group")
+        llm = FakeLLM({"kind": "archive"})
+        Proposer(llm, profile)(make_email(), make_mailbox())
+        self.assertIn("- I run the research group", llm.system)
+
+    def test_empty_profile_leaves_prompt_unchanged(self):
+        from agent.profile import Profile
+        with_profile, without = FakeLLM({"kind": "archive"}), FakeLLM({"kind": "archive"})
+        Proposer(with_profile, Profile())(make_email(), make_mailbox())
+        Proposer(without)(make_email(), make_mailbox())
+        self.assertEqual(with_profile.system, without.system)
+
     def test_classifier_only_trusts_true(self):
         labels = Classifier(FakeLLM({"money": "yes", "injection": True, "deadline": "2026-11-05"}))(make_email())
         self.assertEqual(labels, {"money": False, "injection": True, "deadline": datetime(2026, 11, 5, 9)})

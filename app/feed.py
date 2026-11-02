@@ -5,6 +5,7 @@ or from the synthetic inbox. Decisions come from DeepSeek (needs LLM_API_KEY) or
 rule-based stand-in that needs no key.
 """
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +14,7 @@ from agent.classifier import Classifier
 from agent.llm import LLM, load_env
 from agent.mailbox import Mailbox
 from agent.models import Email
+from agent.profile import Profile
 from agent.proposer import Proposer
 from app import enron, offline_llm
 from eval.inbox import USER, build_inbox
@@ -32,8 +34,16 @@ def defaults() -> dict:
             "llm": "deepseek" if have["deepseek"] else "offline"}
 
 
-def build(source: str, persona: str, count: int, llm_choice: str) -> tuple[Agent, list[Email], Optional[LLM], str]:
-    """(agent, emails to deliver in order, the LLM or None for offline, one line describing the session)."""
+@dataclass
+class Session:
+    agent: Agent
+    feed: list[Email]          # emails to deliver, in order
+    llm: Optional[LLM]         # None: offline stand-in
+    profile: Profile           # what the user tells the agent; lives only in this session
+    description: str
+
+
+def build(source: str, persona: str, count: int, llm_choice: str) -> Session:
     if source == "enron":
         user, feed = enron.sample_inbox(ENRON_ZIP, persona, count)
         mailbox = Mailbox(user)
@@ -46,8 +56,10 @@ def build(source: str, persona: str, count: int, llm_choice: str) -> tuple[Agent
                 mailbox.receive(case.email)    # the user's past mail, so contacts exist
         feed = [c.email for c in cases if c.incoming][:count]
         where = f"{len(feed)} emails from the synthetic inbox"
+    profile = Profile()
     if llm_choice == "deepseek":
-        llm = LLM(cache_path=".llm_cache_local.json")   # keeps these emails out of the eval cache
-        return Agent(mailbox, Proposer(llm), Classifier(llm)), feed, llm, f"{where} · DeepSeek"
+        llm = LLM(cache_path=None)    # in memory only: nothing about this session touches the disk
+        agent = Agent(mailbox, Proposer(llm, profile), Classifier(llm))
+        return Session(agent, feed, llm, profile, f"{where} · DeepSeek")
     agent = Agent(mailbox, offline_llm.propose, offline_llm.classify)
-    return agent, feed, None, f"{where} · offline stand-in (no API key)"
+    return Session(agent, feed, None, profile, f"{where} · offline stand-in (no API key)")

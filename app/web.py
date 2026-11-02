@@ -27,11 +27,10 @@ class App:
         """Starts a fresh session: new agent (nothing learned), new emails, new audit log."""
         s = {**defaults(), **settings}
         s["count"] = int(s["count"])
-        agent, feed, llm, source = build(s["source"], s["persona"], s["count"], s["llm"])   # may fail: keep old session
-        self.settings, self.source = s, source
-        self.audit_path = f"runs/audit_{datetime.now():%Y%m%d_%H%M%S}.csv"
-        self.assistant = Assistant(agent, llm, AuditLog(self.audit_path))
-        self.feed = deque(feed)
+        session = build(s["source"], s["persona"], s["count"], s["llm"])   # may fail: keep the old session
+        self.settings, self.source = s, session.description
+        self.assistant = Assistant(session.agent, session.llm, session.profile, AuditLog())
+        self.feed = deque(session.feed)
         self.planted = 0
 
     def next(self, _: dict) -> None:
@@ -60,6 +59,12 @@ class App:
     def answer(self, form: dict) -> None:
         self.assistant.answer(int(form["id"]), form["reply"])
 
+    def tell(self, form: dict) -> None:
+        self.assistant.tell(form["text"])
+
+    def profile(self, form: dict) -> None:
+        self.assistant.profile.replace(form["text"])
+
     def wait(self, form: dict) -> None:
         self.assistant.wait(float(form.get("days", 1)))
 
@@ -76,9 +81,10 @@ class App:
                           "labels": sorted(mailbox.labels.get(email.id, ()))})
         return {"source": self.source, "settings": self.settings, "available": available(),
                 "preferences": self.preferences(), "timing": self.timing(), "scheduled": self.scheduled(),
+                "profile": self.assistant.profile.notes,
                 "user": mailbox.user_address, "remaining": len(self.feed),
                 "clock": f"{self.assistant.clock:%a %b %d %Y}" if self.assistant.clock else "",
-                "messages": self.assistant.messages, "inbox": inbox[::-1], "audit": self.audit_path}
+                "messages": self.assistant.messages, "inbox": inbox[::-1]}
 
 
     def preferences(self) -> dict:
@@ -118,12 +124,14 @@ class App:
 def serve(settings: dict, port: int = 8000) -> None:
     app = App(settings)
     routes = {"/api/next": app.next, "/api/plant": app.plant, "/api/answer": app.answer, "/api/wait": app.wait,
-              "/api/session": app.session}
+              "/api/session": app.session, "/api/tell": app.tell, "/api/profile": app.profile}
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/api/state":
                 self.send(json.dumps(app.state()), "application/json")
+            elif self.path == "/api/audit.csv":       # built from memory on request; never saved
+                self.send(app.assistant.audit.csv_text(), "text/csv", attachment="wajo_audit.csv")
             else:
                 self.send(PAGE.read_text(), "text/html")
 
@@ -135,10 +143,12 @@ def serve(settings: dict, port: int = 8000) -> None:
                 app.assistant.note(f"Something went wrong: {error}")
             self.send(json.dumps(app.state()), "application/json")
 
-        def send(self, body: str, content_type: str) -> None:
+        def send(self, body: str, content_type: str, attachment: str = "") -> None:
             data = body.encode()
             self.send_response(200)
             self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+            if attachment:
+                self.send_header("Content-Disposition", f'attachment; filename="{attachment}"')
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)

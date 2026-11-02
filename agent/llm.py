@@ -1,6 +1,7 @@
 """DeepSeek chat client with a response cache. Standard library only.
 
 Cached responses make eval runs repeatable and free after the first run.
+The eval keeps its cache in a file; an app session keeps it in memory only.
 """
 import hashlib
 import json
@@ -8,6 +9,7 @@ import os
 import threading
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 API_URL = "https://api.deepseek.com/chat/completions"
 MODEL = "deepseek-chat"
@@ -23,9 +25,9 @@ def load_env(path: str = ".env") -> None:
 
 
 class LLM:
-    def __init__(self, cache_path: str = "eval/llm_cache.json"):
-        self.cache_path = Path(cache_path)
-        self.cache = json.loads(self.cache_path.read_text()) if self.cache_path.exists() else {}
+    def __init__(self, cache_path: Optional[str] = "eval/llm_cache.json"):
+        self.cache_path = Path(cache_path) if cache_path else None    # None: memory only, nothing on disk
+        self.cache = json.loads(self.cache_path.read_text()) if self.cache_path and self.cache_path.exists() else {}
         self.lock = threading.Lock()
 
     def complete_json(self, system: str, user: str) -> dict:
@@ -34,7 +36,8 @@ class LLM:
             reply = self._call(system, user)
             with self.lock:
                 self.cache[key] = reply
-                self.cache_path.write_text(json.dumps(self.cache, indent=1, sort_keys=True))
+                if self.cache_path:
+                    self.cache_path.write_text(json.dumps(self.cache, indent=1, sort_keys=True))
         return self.cache[key]
 
     def _call(self, system: str, user: str) -> dict:

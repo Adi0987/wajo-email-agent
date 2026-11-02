@@ -12,6 +12,7 @@ Interpret their reply. Return JSON:
   "instead": null, or the action they want instead:
      {{"kind": one of {kinds}, "label": "label name or empty", "body": "reply text if they said what to write, else empty"}},
   "timing": null, or for a follow-up or reminder: "ok", "too_early" or "too_late",
+  "remember": a lasting fact or preference about the user to remember (e.g. "Conference invites are noise unless I'm speaking"), or empty,
   "acknowledgement": one short, natural sentence confirming what you'll do}}
 "Do X instead" means decision "no" with instead set. Approving your suggestion means decision "yes"."""
 
@@ -28,7 +29,7 @@ class Interpreter:
         text = reply.strip().lower()
         quick = self.rules(text)
         if quick or self.llm is None:
-            return quick or {"decision": "no", "instead": None, "timing": None,
+            return quick or {"decision": "no", "instead": None, "timing": None, "remember": "",
                              "acknowledgement": "I didn't quite get that, so I'll take it as a no. "
                                                 "You can say things like \"archive it\" or \"label it research\"."}
         result = self.llm.complete_json(PROMPT.format(question=question, kinds=", ".join(ACTIONS)), reply)
@@ -37,6 +38,7 @@ class Interpreter:
             instead = None
         return {"decision": "yes" if result.get("decision") == "yes" else "no", "instead": instead,
                 "timing": result.get("timing") if result.get("timing") in ("ok", "too_early", "too_late") else None,
+                "remember": str(result.get("remember") or ""),
                 "acknowledgement": str(result.get("acknowledgement", ""))}
 
     @staticmethod
@@ -44,16 +46,16 @@ class Interpreter:
         """Short, unambiguous replies, answered without an LLM call."""
         timing = {"too early": "too_early", "early": "too_early", "too late": "too_late", "late": "too_late"}.get(text)
         if timing:
-            return {"decision": "yes", "instead": None, "timing": timing, "acknowledgement": "Noted, I'll adjust the timing."}
+            return {"decision": "yes", "instead": None, "timing": timing, "acknowledgement": "Noted, I'll adjust the timing.", "remember": ""}
         if text in YES:
-            return {"decision": "yes", "instead": None, "timing": "ok", "acknowledgement": ""}
+            return {"decision": "yes", "instead": None, "timing": "ok", "acknowledgement": "", "remember": ""}
         if text in NO:
-            return {"decision": "no", "instead": None, "timing": None, "acknowledgement": ""}
+            return {"decision": "no", "instead": None, "timing": None, "acknowledgement": "", "remember": ""}
         command = re.sub(r"^((no|nope|nah|actually|please|just)\b[,.!]?\s*)+", "", text).removesuffix(" instead")
         word, _, rest = command.partition(" ")
         kind = ALIASES.get(word, word)
         if kind in ACTIONS:
             label = re.sub(r"^((it|with|as|under|to)\s+)+", "", rest).strip(" '\"") if kind == "label" else ""
             return {"decision": "no", "instead": {"kind": kind, "label": label, "body": ""}, "timing": None,
-                    "acknowledgement": ""}
+                    "acknowledgement": "", "remember": ""}
         return None
