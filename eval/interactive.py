@@ -30,7 +30,11 @@ DONE = {"keep": "Left it in your inbox", "archive": "Archived it", "label": "Lab
         "mark_read": "Marked it read", "trash": "Moved it to trash", "draft_reply": "Drafted a reply",
         "send": "Sent the reply", "forward": "Forwarded it", "unsubscribe": "Unsubscribed"}
 ALIASES = {"reply": "draft_reply", "leave": "keep", "inbox": "keep", "delete": "trash", "read": "mark_read"}
-CHOICES = "archive, label, trash, keep, reply"
+CHOICES = "archive, label <name>, trash, keep, reply"
+
+
+def times(count: float) -> str:
+    return {1: "once", 2: "twice"}.get(int(count), f"{int(count)} times")
 
 
 def name_of(address: str) -> str:
@@ -117,17 +121,17 @@ class Session:
         if checks["action"] == level:
             return "This would leave your mailbox and can't be undone, so I always check first."
         if checks["email"] == level:
-            return "It involves money, so I'm checking with you." if level == Level.ASK \
-                else "It involves money, so I'm letting you know."
+            return "It mentions money, so I'm checking with you." if level == Level.ASK \
+                else "It mentions money, so I'm letting you know."
         sender = other_party(self.agent.mailbox.get(action.email_id), self.agent.mailbox)[0]
         approvals, rejections = self.agent.rates.by_sender[(action.kind, sender)]
         if level == Level.NOTIFY:
-            return f"You've okayed this {int(approvals)} times, so I went ahead." if approvals \
+            return f"You've okayed this {times(approvals)}, so I went ahead." if approvals \
                 else "You usually okay this for similar senders, so I went ahead."
         if rejections:
             return "You've said no to this before, so I'm checking."
         if approvals:
-            return f"You've okayed this {int(approvals)} time{'s' if approvals > 1 else ''} so far. A few more and I'll stop asking."
+            return f"You've okayed this {times(approvals)} so far. A few more and I'll stop asking."
         return f"I haven't learned how you handle this from {name_of(sender)} yet."
 
     def show_details(self, entry: dict) -> None:
@@ -156,9 +160,9 @@ class Session:
                 agent.approve(notice, notice.at)
                 response = "approved"
             else:
-                chosen = self.chosen(answer)
-                agent.reject(notice, chosen=chosen)
-                response = f"rejected, wanted {chosen}" if chosen else "rejected"
+                chosen = self.chosen(answer, notice.email_id)
+                agent.reject(notice, chosen=chosen.kind if chosen else None)
+                response = f"rejected, wanted {chosen.kind}" if chosen else "rejected"
                 print(paint(f"  Got it. {self.remember(chosen)}", DIM))
         elif kind == "notify":
             print(paint(f"\n  ✔ {DONE[notice.action.kind]}. ", CYAN) + reason)
@@ -169,9 +173,9 @@ class Session:
                 agent.confirm(notice)
                 response = "confirmed"
             else:
-                chosen = None if answer == "u" else self.chosen(answer)
-                agent.undo(notice.action, chosen=chosen)
-                response = f"undone, wanted {chosen}" if chosen else "undone"
+                chosen = None if answer == "u" else self.chosen(answer, notice.email_id)
+                agent.undo(notice.action, chosen=chosen.kind if chosen else None)
+                response = f"undone, wanted {chosen.kind}" if chosen else "undone"
                 print(paint(f"  ↶ Undone. {self.remember(chosen)}", YELLOW))
         elif kind == "escalate":
             print(paint("\n  ⚠ I'm not touching this one. ", BOLD, RED) + reason)
@@ -194,18 +198,21 @@ class Session:
         self.audit.response(notice.email_id, response)
 
     def remember(self, chosen) -> str:
-        return f"I'll remember you'd rather {describe(Action(chosen, ''))} for emails like this." if chosen else ""
+        return f"I'll remember you'd rather {describe(chosen)} for emails like this." if chosen else ""
 
     def ask_user(self, question: str) -> str:
         return input(paint(question, DIM)).strip().lower()
 
-    def chosen(self, answer: str):
-        """The action the user typed, or None if it isn't one."""
-        kind = ALIASES.get(answer, answer)
+    def chosen(self, answer: str, email_id: str):
+        """The action the user typed, e.g. "trash" or "label to read", or None if it isn't one."""
+        word, _, rest = answer.partition(" ")
+        kind = ALIASES.get(word, word)
         if kind in ACTIONS:
-            return kind
+            label = rest.replace("with", "", 1).strip().strip("'\"") if kind == "label" else ""
+            return Action(kind, email_id, label=label)
         if answer not in ("n", "no", "u"):
-            print(paint(f"  I don't know \"{answer}\", so I'll just take that as a no.", DIM))
+            print(paint(f"  I didn't understand \"{answer}\", so I'm taking it as a no. "
+                        f"I understand: {CHOICES}.", DIM))
         return None
 
 
