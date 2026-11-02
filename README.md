@@ -7,13 +7,19 @@ Python 3.9+, standard library only. Design decisions: [DESIGN.md](DESIGN.md).
 ## Try it
 
 ```
-python3 wajo.py try
+python3 wajo.py ui
 ```
 
-You are the user. Emails arrive one at a time, and the agent talks to you like an assistant: what the email is, what it wants to do and why, and why it's asking (or that it went ahead). You approve, reject, undo, or tell it what you'd rather do, and it learns. `--details` also shows each safety check's result. A summary prints at the end, and every decision is saved to `runs/audit_<time>.csv`.
+Opens the assistant in your browser. Press **Next email** and an email arrives; the assistant tells you what it is, what it wants to do and why, and whether it's asking first or already did it. Answer **Yes**, **No**, **Undo**, or tell it what you'd rather do ("label reading"), and it learns. **Wait a day** moves the clock so follow-ups and deadline reminders fire.
 
-- With `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder, a random sample of a real Enron inbox arrives one email at a time, different each run (`--persona kaminski-v`, `--count 20`). This uses DeepSeek: put `LLM_API_KEY=...` in `.env`.
-- Without it, or with `--offline`, emails come from the synthetic inbox and no API key is needed.
+**Admin: plant email** delivers any email you write, with presets for prompt injection, a spoofed colleague, a wire request, an invoice, a deadline and a newsletter. Tick "Sent by me", then **Wait a day** a few times, to test follow-ups.
+
+`python3 wajo.py try` is the same assistant in the terminal.
+
+- With `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder, emails are a random sample of a real Enron inbox, different each run (`--persona kaminski-v`, `--count 20`). This uses DeepSeek: put `LLM_API_KEY=...` in `.env`.
+- Without it, or with `--offline`, emails come from the synthetic inbox and a simple rule-based stand-in replaces the LLM, so no API key is needed.
+
+Every decision and your response are saved to `runs/audit_<time>.csv`.
 
 ## Evaluate it
 
@@ -37,5 +43,6 @@ python3 wajo.py tune    # re-pick the learning thresholds on separate seeds
 | Folder | What's in it |
 |---|---|
 | `agent/` | The agent. `agent.py` wires it; `checks.py` and `flags.py` are the safety floor; `rates.py` is the learning; `executor.py` is the only code that changes the mailbox. |
-| `eval/` | Synthetic inbox, simulated user, metrics, baselines, tuning, transcripts, the `try` session and the Enron loader. |
+| `app/` | The assistant you talk to: `assistant.py` turns decisions into plain language for both `web.py` (browser) and `cli.py` (terminal). |
+| `eval/` | Synthetic inbox, simulated user, metrics, baselines, tuning and transcripts. |
 | `tests/` | Unit tests. |
