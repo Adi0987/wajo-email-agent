@@ -15,14 +15,14 @@ Autonomy depends on two inputs: **risk**, from what the action does and what the
 A background worker consumes an event queue with two sources: new mail and a scheduler. Approval requests are asynchronous; other emails keep processing while one waits. A simulated clock drives the eval.
 
 The scheduler checks two things:
-- **Unanswered threads.** The user sent the last message and N days passed with no reply. The agent drafts a follow-up and notifies the user.
+- **Unanswered threads.** The user sent the last message and N days passed with no reply. The agent nudges the user; it drafts a follow-up only if asked.
 - **Deadlines.** The classifier extracts deadlines from incoming mail. The agent notifies the user L days before each one.
 
-N and L are learned per sender category from "too early" / "too late" feedback. Starting values: N = 3 days, L = 1 day.
+N and L are learned per sender category from "too early" / "too late" feedback. Starting values: N = 3 days, L = 1 day. The user can also ask for a reminder on any email ("remind me tomorrow"); it is scheduled the same way.
 
 ## 2. Picking a level and the safety floor
 
-The LLM suggests an action. Three checks decide how much the agent does on its own, and the agent follows the most cautious answer.
+The LLM suggests an action. Three checks decide how much the agent does on its own, and the agent follows the most cautious answer. The agent never writes a reply on its own: `draft_reply` and `send` happen only when the user asks for them.
 
 | Level | What happens |
 |---|---|
@@ -107,4 +107,4 @@ From the DeepSeek run: [eval/transcripts_deepseek.md](eval/transcripts_deepseek.
 3. Correction: an undo lowers autonomy for that sender and action
 4. Floor: learned Silent, but a money email caps the action at Notify
 5. Injection: escalated whatever the proposer suggests
-6. Proactive: unanswered thread, the agent drafts a follow-up
+6. Proactive: unanswered thread, the agent nudges you

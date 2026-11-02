@@ -8,9 +8,10 @@ from app.assistant import Assistant
 from app.feed import build, defaults
 from app.style import BLUE, BOLD, CYAN, DIM, GREEN, RED, YELLOW, paint
 
-COLOR = {"ask": YELLOW, "notify": CYAN, "silent": GREEN, "escalate": RED, "nudge": BLUE, "reminder": BLUE}
+COLOR = {"ask": YELLOW, "notify": CYAN, "silent": GREEN, "escalate": RED, "nudge": BLUE, "reminder": BLUE,
+         "remind_me": BLUE}
 LABEL = {"ask": "asking", "notify": "did it, told you", "silent": "did it quietly", "escalate": "escalated",
-         "nudge": "follow-up", "reminder": "reminder"}
+         "nudge": "follow-up", "reminder": "reminder", "remind_me": "your reminder"}
 
 
 def wrap(text: str, indent: str = "    ") -> str:

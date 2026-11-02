@@ -14,9 +14,6 @@ from agent.scheduler import Scheduler
 from agent.senders import other_party
 from agent.timing import Timing
 
-FOLLOW_UP_BODY = "Just following up on my last email."
-
-
 class Agent:
     def __init__(self, mailbox: Mailbox,
                  propose: Callable[[Email, Mailbox, Optional[str]], Action],
@@ -41,10 +38,11 @@ class Agent:
     def tick(self, now: datetime) -> None:
         """One pass of the background worker."""
         for email in self.scheduler.due_follow_ups(now):
-            self.notices.append(Notice("nudge", email.id, now))
-            self.executor.handle(Action("draft_reply", email.id, body=FOLLOW_UP_BODY), now)
+            self.notices.append(Notice("nudge", email.id, now))     # tells the user; drafts only if asked
         for email in self.scheduler.due_reminders(now):
             self.notices.append(Notice("reminder", email.id, now))
+        for email in self.scheduler.due_requested(now):
+            self.notices.append(Notice("remind_me", email.id, now))
         while self.queue:
             self._handle(self.queue.popleft(), now)
 
@@ -87,6 +85,10 @@ class Agent:
     def undo(self, action: Action, chosen: Optional[str] = None) -> None:
         self.executor.undo(action)
         self._record(action, approved=False, chosen=chosen)
+
+    def remind(self, email_id: str, at: datetime) -> None:
+        """The user asked to be reminded about this email at `at`."""
+        self.scheduler.remind(email_id, at)
 
     def do_instead(self, action: Action, now: datetime) -> bool:
         """Runs what the user asked for instead. Feedback is recorded by reject/undo with `chosen`."""

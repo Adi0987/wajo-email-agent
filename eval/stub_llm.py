@@ -10,7 +10,7 @@ import random
 from agent.models import Action
 from eval.inbox import ATTACKER, Case
 
-WRONG_CHOICES = ["keep", "archive", "label", "trash", "draft_reply"]
+WRONG_CHOICES = ["keep", "archive", "label", "trash", "mark_read"]
 
 
 class StubLLM:
@@ -28,8 +28,7 @@ class StubLLM:
         kind = case.correct
         if self.rng.random() > self.accuracy:
             kind = self.rng.choice([k for k in WRONG_CHOICES if k != case.correct])
-        return Action(kind, email.id, label="auto" if kind == "label" else "",
-                      body="Thanks!" if kind == "draft_reply" else "")
+        return Action(kind, email.id, label="auto" if kind == "label" else "")
 
     def classify(self, email) -> dict:
         return {"money": False, "injection": False, "deadline": self.truth[email.id].deadline}

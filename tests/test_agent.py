@@ -92,6 +92,23 @@ class TestAgent(unittest.TestCase):
         agent.tick(T0 + timedelta(days=10))
         self.assertEqual(agent.notices, [])
 
+    def test_follow_up_nudge_does_not_draft(self):
+        agent = stub_agent(make_mailbox())
+        agent.tick(T0)
+        agent.mailbox.receive(make_email(id="s1", sender=USER, to=("boss@wajo.ai",)))
+        agent.tick(T0 + timedelta(days=3))
+        self.assertEqual([n.kind for n in agent.notices], ["nudge"])
+        self.assertEqual(agent.mailbox.drafts, {})
+
+    def test_reminder_the_user_asked_for(self):
+        agent = stub_agent(make_mailbox(), "keep")
+        deliver(agent, make_email())
+        agent.remind("e1", T0 + timedelta(days=1))
+        agent.tick(T0 + timedelta(hours=12))
+        self.assertNotIn("remind_me", [n.kind for n in agent.notices])
+        agent.tick(T0 + timedelta(days=1))
+        self.assertIn("remind_me", [n.kind for n in agent.notices])
+
     def test_deadline_reminder_l_days_before(self):
         deadline = T0 + timedelta(days=5)
         agent = stub_agent(make_mailbox(), "keep", labels={"deadline": deadline})

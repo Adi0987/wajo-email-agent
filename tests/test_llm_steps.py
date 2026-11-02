@@ -22,9 +22,14 @@ class TestLLMSteps(unittest.TestCase):
         self.assertEqual(action.kind, "keep")
 
     def test_proposal_fields(self):
-        reply = {"kind": "send", "to": ["a@b.com"], "body": "ok"}
+        reply = {"kind": "forward", "to": ["a@b.com"]}
         action = Proposer(FakeLLM(reply))(make_email(), make_mailbox())
-        self.assertEqual((action.kind, action.to, action.body), ("send", ("a@b.com",), "ok"))
+        self.assertEqual((action.kind, action.to), ("forward", ("a@b.com",)))
+
+    def test_never_volunteers_a_reply(self):
+        for kind in ("draft_reply", "send"):
+            action = Proposer(FakeLLM({"kind": kind, "body": "hi"}))(make_email(), make_mailbox())
+            self.assertEqual(action.kind, "keep")
 
     def test_usual_choice_goes_in_prompt(self):
         llm = FakeLLM({"kind": "archive"})

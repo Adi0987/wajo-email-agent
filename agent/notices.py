@@ -7,7 +7,7 @@ from agent.models import Action
 
 @dataclass(frozen=True)
 class Notice:
-    kind: str                         # notify, ask, escalate, nudge or reminder
+    kind: str                         # notify, ask, escalate, nudge, reminder or remind_me (asked for by the user)
     email_id: str
     at: datetime
     action: Optional[Action] = None

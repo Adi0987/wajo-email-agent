@@ -2,6 +2,8 @@
 from typing import Optional
 
 from agent.checks import ACTIONS
+
+USER_ONLY = {"draft_reply", "send"}    # the agent writes replies only when the user asks for one
 from agent.llm import LLM
 from agent.mailbox import Mailbox
 from agent.models import Action, Email
@@ -22,7 +24,7 @@ class Proposer:
             system += USUAL_CHOICE.format(kind=usual)
         reply = self.llm.complete_json(system, format_email(email))
         kind = reply.get("kind")
-        if kind not in ACTIONS:
+        if kind not in ACTIONS or kind in USER_ONLY:
             return Action("keep", email.id)
         return Action(kind, email.id,
                       label=str(reply.get("label") or ""),

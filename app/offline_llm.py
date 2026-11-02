@@ -23,9 +23,7 @@ def propose(email: Email, mailbox: Mailbox, usual=None) -> Action:
         return Action(usual, email.id)
     if email.has_unsubscribe:
         return Action("archive", email.id)
-    if "?" in email.body:
-        return Action("draft_reply", email.id, body="Thanks for your note, I'll get back to you shortly.")
-    return Action("keep", email.id)
+    return Action("keep", email.id)     # needs the user; replies are written only when asked
 
 
 def classify(email: Email) -> dict:

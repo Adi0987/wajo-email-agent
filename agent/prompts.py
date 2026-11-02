@@ -8,12 +8,10 @@ Choose the single most useful action. Prefer a concrete action over keep:
 - label: worth keeping and finding later (give "label", e.g. "research", "finance", "travel")
 - trash: spam, cold sales pitches, irrelevant promotions
 - mark_read: read-only information the user may want to glance at
-- draft_reply: someone asks the user something or expects an answer (write the reply in "body")
-- send: send a reply (give "to" and "body")
 - forward: forward it (give "to")
 - unsubscribe: unwanted mailing lists
-- keep: only when the user must handle it personally and none of the above helps
-Return JSON: {{"kind": "...", "label": "", "to": [], "body": ""}}"""
+- keep: the user must handle it personally, including anything that needs their reply. Never write replies.
+Return JSON: {{"kind": "...", "label": "", "to": []}}"""
 
 PROFILE = "\nWhat the user has told you about themselves and how they work. Read it all and follow it:\n{notes}"
 

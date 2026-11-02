@@ -15,16 +15,22 @@ class Scheduler:
         self.deadlines: dict[str, datetime] = {}   # email id -> deadline
         self.done: set[str] = set()                # ids already nudged or reminded
         self.started: Optional[datetime] = None    # set on the first tick; older threads are never chased
+        self.requested: dict[str, datetime] = {}   # email id -> when the user asked to be reminded
 
     def add_deadline(self, email_id: str, deadline: datetime) -> None:
         self.deadlines[email_id] = deadline
 
+    def remind(self, email_id: str, at: datetime) -> None:
+        """A reminder the user asked for, e.g. "remind me tomorrow to respond"."""
+        self.requested[email_id] = at
+
     def pending(self) -> list[dict]:
         """Follow-ups and reminders that haven't fired yet, soonest first.
 
-        Each: {"kind": "follow_up" or "reminder", "email": Email, "category": str, "at": when it fires}.
+        Each: {"kind": "follow_up", "reminder" or "requested", "email": Email, "category": str, "at": when it fires}.
         """
-        items = []
+        items = [{"kind": "requested", "email": self.mailbox.get(email_id), "category": "", "at": at}
+                 for email_id, at in self.requested.items()]
         for thread_id in {e.thread_id for e in self.mailbox.emails.values()}:
             last = self.mailbox.thread(thread_id)[-1]
             if last.sender != self.mailbox.user_address or last.id in self.done:
@@ -51,6 +57,13 @@ class Scheduler:
     def due_reminders(self, now: datetime) -> list[Email]:
         """Emails whose deadline is L days away or closer."""
         return self._due("reminder", now)
+
+    def due_requested(self, now: datetime) -> list[Email]:
+        """Reminders the user asked for, once their time comes."""
+        due = [self.mailbox.get(i) for i, at in self.requested.items() if at <= now]
+        for email in due:
+            del self.requested[email.id]
+        return due
 
     def _due(self, kind: str, now: datetime) -> list[Email]:
         due = [item["email"] for item in self.pending() if item["kind"] == kind and item["at"] <= now]

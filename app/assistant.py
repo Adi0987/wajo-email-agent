@@ -92,15 +92,13 @@ class Assistant:
             verdict = result["timing"] or "ok"
             self.agent.timing_feedback(notice, verdict)
             self.audit.response(notice.email_id, f"{notice.kind} timing {verdict.replace('_', ' ')}")
-        new = []
-        if result.get("remember"):
+        done = self.agent.do_instead(instead, self.clock) if instead else None
+        if result["remind_in_days"]:
+            self.agent.remind(notice.email_id, self.clock + timedelta(days=result["remind_in_days"]))
+        if result["remember"]:
             self.profile.add(result["remember"])
-            new.append(self.note(f"I'll remember that: {result['remember']}"))
-        acknowledgement = result["acknowledgement"] or self._acknowledge(notice, agreed, instead)
-        if acknowledgement:
-            new.append(self.note(acknowledgement))
-        if instead:
-            self.agent.do_instead(instead, self.clock)
+        reply = self._acknowledge(notice, agreed, instead, done, result)
+        new = [self.note(reply)] if reply else []
         return new + self._step()
 
     def tell(self, text: str) -> list[dict]:
@@ -148,6 +146,8 @@ class Assistant:
             email = item["email"]
             if item["kind"] == "follow_up":
                 what = f"Follow up with {email.to[0]} on \"{email.subject}\" if no reply"
+            elif item["kind"] == "requested":
+                what = f"Remind you about \"{email.subject}\" (you asked)"
             else:
                 what = f"Remind you about \"{email.subject}\" (due {item['deadline']:%b %d})"
             items.append({"what": what, "at": f"{item['at']:%a %b %d %H:%M}"})
@@ -190,6 +190,9 @@ class Assistant:
             days = (notice.at - email.sent_at).days
             return self._add("nudge", notice=notice, text=f"You emailed {name_of(email.to[0])} about \"{email.subject}\" "
                              f"{days} days ago and haven't heard back. Want to follow up? Is this good timing?")
+        if notice.kind == "remind_me":
+            return self._add("remind_me", text=f"Here's the reminder you asked for: \"{email.subject}\" "
+                             f"from {name_of(email.sender)}.", about=self._about(email))
         if notice.kind == "reminder":
             due = self.agent.scheduler.deadlines[email.id]
             return self._add("reminder", notice=notice, text=f"Heads up: \"{email.subject}\" from {name_of(email.sender)} "
@@ -238,13 +241,23 @@ class Assistant:
         return {**{name: level.name.title() for name, level in entry["checks"].items()},
                 "rate": f"approval rate {rate:.0%} (Notify ≥{NOTIFY_AT:.0%}, Silent ≥{SILENT_AT:.0%})"}
 
-    @staticmethod
-    def _acknowledge(notice: Notice, agreed: bool, instead: Optional[Action]) -> str:
+    def _acknowledge(self, notice: Notice, agreed: bool, instead: Optional[Action], done: Optional[bool],
+                     result: dict) -> str:
+        """What Wajo says back, built only from what the agent actually did."""
+        parts = []
         if instead:
-            return f"OK, I'll {describe(instead)} instead, and remember that for emails like this."
-        if agreed:
-            return ""
-        return "Undone." if notice.kind == "notify" else "OK, I won't."
+            parts.append(f"OK, I'll {describe(instead)} instead." if done
+                         else f"I can't {describe(instead)} for this email: the safety checks don't allow it.")
+        elif not agreed and notice.kind == "notify":
+            parts.append("Undone.")
+        elif not agreed and notice.kind == "ask":
+            parts.append(f"OK, I won't {describe(notice.action)}." if notice.action.kind != "keep" else "OK.")
+        if result["remind_in_days"]:
+            when = self.clock + timedelta(days=result["remind_in_days"])
+            parts.append(f"I'll remind you about it on {when:%a %b %d}.")
+        if result["remember"]:
+            parts.append(f"I'll remember: {result['remember']}.")
+        return " ".join(parts)
 
     def _add(self, kind: str, notice: Optional[Notice] = None, **fields) -> dict:
         message = {"id": next(self._ids), "kind": kind, "open": notice is not None, **fields}
