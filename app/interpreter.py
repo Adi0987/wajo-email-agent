@@ -16,6 +16,18 @@ Interpret their reply. Return JSON:
   "acknowledgement": one short, natural sentence confirming what you'll do}}
 "Do X instead" means decision "no" with instead set. Approving your suggestion means decision "yes"."""
 
+CHAT = """You are Wajo, an email assistant, chatting with the user. They sent you a message outside any question.
+What you already know about them:
+{profile}
+Return JSON:
+{{"remember": a lasting fact or preference about the user or how they handle email that's worth remembering
+              (rewrite it as a short note, e.g. "Runs the research group"), or empty if there's nothing to remember,
+  "reply": one or two short, friendly sentences answering them. If you remembered something, say so briefly.}}"""
+
+ABOUT_ME = re.compile(r"\b(i|i'm|i am|my|me|always|never|usually|prefer|don't|do not|please don't)\b", re.I)
+OFFLINE_HELLO = ("Hi! Sample a new email and I'll tell you what I'd do with it. You can also tell me how you work, "
+                 "like \"I run the research group\" or \"I never read conference invites\".")
+
 YES = {"", "y", "yes", "ok", "okay", "sure", "fine", "good", "go ahead", "do it", "yep", "looks good", "thanks"}
 NO = {"n", "no", "nope", "undo", "don't", "dont", "stop"}
 ALIASES = {"reply": "draft_reply", "leave": "keep", "inbox": "keep", "delete": "trash", "read": "mark_read", "file": "label"}
@@ -40,6 +52,15 @@ class Interpreter:
                 "timing": result.get("timing") if result.get("timing") in ("ok", "too_early", "too_late") else None,
                 "remember": str(result.get("remember") or ""),
                 "acknowledgement": str(result.get("acknowledgement", ""))}
+
+    def chat(self, message: str, profile: str) -> dict:
+        """A message outside any question: {"remember": note or "", "reply": text}."""
+        if self.llm is None:
+            if ABOUT_ME.search(message) and len(message.split()) >= 3:
+                return {"remember": message.strip(), "reply": "Got it, I'll keep that in mind when I suggest what to do."}
+            return {"remember": "", "reply": OFFLINE_HELLO}
+        result = self.llm.complete_json(CHAT.format(profile=profile or "(nothing yet)"), message)
+        return {"remember": str(result.get("remember") or "").strip(), "reply": str(result.get("reply") or "OK.")}
 
     @staticmethod
     def rules(text: str) -> Optional[dict]:

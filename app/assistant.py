@@ -102,10 +102,12 @@ class Assistant:
         return new + self._step()
 
     def tell(self, text: str) -> list[dict]:
-        """Something the user tells the agent about themselves, outside any question."""
+        """A message from the user outside any question. Only facts or preferences about them are remembered."""
         self._add("user", text=text)
-        self.profile.add(text)
-        return [self.note("Got it. I'll keep that in mind when I suggest what to do.")]
+        result = self.interpreter.chat(text, self.profile.text())
+        if result["remember"]:
+            self.profile.add(result["remember"])
+        return [self.note(result["reply"])]
 
     def waiting(self) -> set[str]:
         """Email ids with a question the user hasn't answered yet."""
