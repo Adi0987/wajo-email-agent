@@ -13,7 +13,7 @@ ADDRESS = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 def propose(email: Email, mailbox: Mailbox, usual=None) -> Action:
     body = email.body.lower()
     addresses = [a for a in ADDRESS.findall(email.body) if a.lower() != email.sender]
-    if addresses and ("forward" in body or "send" in body):
+    if addresses and "forward" in body:
         return Action("forward", email.id, to=(addresses[0].lower(),))   # naive: follows the request
     if usual:
         return Action(usual, email.id)

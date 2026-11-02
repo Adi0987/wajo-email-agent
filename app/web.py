@@ -12,14 +12,21 @@ from pathlib import Path
 from agent.audit import AuditLog
 from agent.models import Email
 from app.assistant import Assistant
-from app.feed import build
+from app.feed import available, build, defaults
 
 PAGE = Path(__file__).with_name("index.html")
 
 
 class App:
-    def __init__(self, persona: str, count: int, offline: bool):
-        agent, feed, narrator, self.source = build(persona, count, offline)
+    def __init__(self, settings: dict):
+        self.session(settings)
+
+    def session(self, settings: dict) -> None:
+        """Starts a fresh session: new agent (nothing learned), new emails, new audit log."""
+        s = {**defaults(), **settings}
+        s["count"] = int(s["count"])
+        agent, feed, narrator, source = build(s["source"], s["persona"], s["count"], s["llm"])   # may fail: keep old session
+        self.settings, self.source = s, source
         self.audit_path = f"runs/audit_{datetime.now():%Y%m%d_%H%M%S}.csv"
         self.assistant = Assistant(agent, narrator, AuditLog(self.audit_path))
         self.feed = deque(feed)
@@ -64,14 +71,16 @@ class App:
                       else "Draft ready" if email.id in mailbox.drafts else "Inbox")
             inbox.append({"subject": email.subject or "(no subject)", "sender": email.sender, "status": status,
                           "labels": sorted(mailbox.labels.get(email.id, ()))})
-        return {"source": self.source, "user": mailbox.user_address, "remaining": len(self.feed),
+        return {"source": self.source, "settings": self.settings, "available": available(),
+                "user": mailbox.user_address, "remaining": len(self.feed),
                 "clock": f"{self.assistant.clock:%a %b %d %Y}" if self.assistant.clock else "",
                 "messages": self.assistant.messages, "inbox": inbox[::-1], "audit": self.audit_path}
 
 
-def serve(persona: str, count: int, offline: bool, port: int = 8000) -> None:
-    app = App(persona, count, offline)
-    routes = {"/api/next": app.next, "/api/plant": app.plant, "/api/answer": app.answer, "/api/wait": app.wait}
+def serve(settings: dict, port: int = 8000) -> None:
+    app = App(settings)
+    routes = {"/api/next": app.next, "/api/plant": app.plant, "/api/answer": app.answer, "/api/wait": app.wait,
+              "/api/session": app.session}
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):

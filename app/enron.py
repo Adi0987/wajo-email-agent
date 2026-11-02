@@ -70,5 +70,5 @@ def sample_inbox(source: str, person: str, count: int) -> tuple[str, list[Email]
             picked[rng.randrange(count)] = raw
     inbox = sorted((e for i, raw in enumerate(picked) if (e := parse(raw, f"m{i}"))), key=lambda e: e.sent_at)
     if not inbox:
-        raise SystemExit(f"No inbox emails found for {person} in {source}")
+        raise ValueError(f"No inbox emails found for \"{person}\" in {source}")
     return recipients.most_common(1)[0][0], inbox

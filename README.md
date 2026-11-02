@@ -7,19 +7,16 @@ Python 3.9+, standard library only. Design decisions: [DESIGN.md](DESIGN.md).
 ## Try it
 
 ```
-python3 wajo.py ui
+python3 wajo.py
 ```
 
 Opens the assistant in your browser. Press **Next email** and an email arrives; the assistant tells you what it is, what it wants to do and why, and whether it's asking first or already did it. Answer **Yes**, **No**, **Undo**, or tell it what you'd rather do ("label reading"), and it learns. **Wait a day** moves the clock so follow-ups and deadline reminders fire.
 
-**Admin: plant email** delivers any email you write, with presets for prompt injection, a spoofed colleague, a wire request, an invoice, a deadline and a newsletter. Tick "Sent by me", then **Wait a day** a few times, to test follow-ups.
+**Admin** has two tabs:
+- **Session:** where emails come from (a random sample of a real Enron inbox, acting as that person, or the synthetic test inbox), how many, and who decides (DeepSeek or an offline rule-based stand-in). Starting a new session resets what the assistant has learned.
+- **Plant an email:** deliver any email you write, with presets for prompt injection, a spoofed colleague, a wire request, an invoice, a deadline and a newsletter. Tick "Sent by me", then **Wait a day** a few times, to test follow-ups.
 
-`python3 wajo.py try` is the same assistant in the terminal.
-
-- With `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder, emails are a random sample of a real Enron inbox, different each run (`--persona kaminski-v`, `--count 20`). This uses DeepSeek: put `LLM_API_KEY=...` in `.env`.
-- Without it, or with `--offline`, emails come from the synthetic inbox and a simple rule-based stand-in replaces the LLM, so no API key is needed.
-
-Every decision and your response are saved to `runs/audit_<time>.csv`.
+The Enron option needs `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder; DeepSeek needs `LLM_API_KEY=...` in `.env`. Without them, the synthetic inbox and the offline stand-in work with nothing to set up. Every decision and your response are saved to `runs/audit_<time>.csv`. `python3 wajo.py try` is the same assistant in the terminal.
 
 ## Evaluate it
 

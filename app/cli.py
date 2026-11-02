@@ -4,7 +4,7 @@ from datetime import datetime
 
 from agent.audit import AuditLog
 from app.assistant import CHOICES, Assistant
-from app.feed import build
+from app.feed import build, defaults
 from app.style import BLUE, BOLD, CYAN, DIM, GREEN, RED, YELLOW, paint
 
 COLOR = {"ask": YELLOW, "notify": CYAN, "silent": GREEN, "escalate": RED, "nudge": BLUE, "reminder": BLUE,
@@ -41,8 +41,9 @@ def ask(message: dict) -> str:
     return {"e": "too_early", "l": "too_late"}.get(answer, "ok")
 
 
-def run(persona: str, count: int, offline: bool, details: bool) -> None:
-    agent, feed, narrator, source = build(persona, count, offline)
+def run(settings: dict, details: bool) -> None:
+    s = {**defaults(), **settings}
+    agent, feed, narrator, source = build(s["source"], s["persona"], s["count"], s["llm"])
     assistant = Assistant(agent, narrator, AuditLog(f"runs/audit_{datetime.now():%Y%m%d_%H%M%S}.csv"))
     print(paint("\nHi, I'm your email assistant. ", BOLD) + f"Here come {source}. "
           "I'll ask before doing things until I learn how you like them handled.")

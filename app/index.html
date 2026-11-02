@@ -76,6 +76,14 @@
   .checks label { display: flex; gap: 6px; align-items: center; margin: 0; color: var(--ink); }
   .presets { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
   .presets button { font-size: 12px; padding: 4px 10px; }
+  .tabs { display: flex; gap: 4px; margin: 4px 0 12px; border-bottom: 1px solid var(--line); }
+  .tabs button { border: 0; border-radius: 8px 8px 0 0; background: none; color: var(--muted); padding: 8px 14px; }
+  .tabs button.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+  .option { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; font-size: 14px; color: var(--ink); }
+  .option small { display: block; color: var(--muted); }
+  .option.off { opacity: .5; }
+  .row { display: flex; gap: 12px; } .row > div { flex: 1; }
+  dialog input[type=number] { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--bg); color: var(--ink); }
 </style>
 </head>
 <body>
@@ -84,7 +92,7 @@
   <div class="source" id="source"></div>
   <button class="primary" id="next">Next email</button>
   <button id="wait">Wait a day</button>
-  <button id="admin">Admin: plant email</button>
+  <button id="admin">Admin</button>
 </header>
 <main>
   <section class="feed" id="feed"></section>
@@ -94,11 +102,37 @@
   </aside>
 </main>
 
-<dialog id="plant">
-  <h2>Plant an email</h2>
-  <div class="meta">Deliver any email to test a specific case. Presets:</div>
-  <div class="presets" id="presets"></div>
-  <form method="dialog" id="plant-form">
+<dialog id="admin-panel">
+  <h2>Admin</h2>
+  <div class="tabs"><button type="button" class="on" data-tab="session">Session</button><button type="button" data-tab="plant">Plant an email</button></div>
+
+  <form method="dialog" id="session-form" data-pane="session">
+    <div class="meta">Starting a new session resets what the assistant has learned.</div>
+    <label>Emails come from</label>
+    <div class="option" id="opt-enron"><input type="radio" name="source" value="enron">
+      <div>A real Enron inbox<small>Random emails, acting as this person. Needs enron-email-dataset.zip in the project folder.</small></div></div>
+    <div class="option"><input type="radio" name="source" value="synthetic">
+      <div>The synthetic test inbox<small>Newsletters, colleagues, invoices, deadlines and attacks.</small></div></div>
+    <div class="row">
+      <div><label>Enron person</label><input type="text" name="persona" list="personas"></div>
+      <div><label>Number of emails</label><input type="number" name="count" min="1" max="200"></div>
+    </div>
+    <datalist id="personas"><option value="kaminski-v"><option value="skilling-j"><option value="lay-k">
+      <option value="dasovich-j"><option value="kean-s"><option value="jones-t"><option value="mann-k"><option value="beck-s"></datalist>
+    <label>Decisions made by</label>
+    <div class="option" id="opt-deepseek"><input type="radio" name="llm" value="deepseek">
+      <div>DeepSeek<small>Needs LLM_API_KEY in .env.</small></div></div>
+    <div class="option"><input type="radio" name="llm" value="offline">
+      <div>Offline stand-in<small>Simple rules, no API key. Good for trying the safety checks.</small></div></div>
+    <div class="actions" style="justify-content:flex-end">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button class="primary" value="session">Start new session</button>
+    </div>
+  </form>
+
+  <form method="dialog" id="plant-form" data-pane="plant" hidden>
+    <div class="meta">Deliver any email to test a specific case. Presets:</div>
+    <div class="presets" id="presets"></div>
     <label>From</label><input type="text" name="sender" placeholder="someone@example.com">
     <label>Subject</label><input type="text" name="subject">
     <label>Body</label><textarea name="body"></textarea>
@@ -110,7 +144,7 @@
     <label>To (only for "sent by me")</label><input type="text" name="to" placeholder="colleague@example.com">
     <div class="actions" style="justify-content:flex-end">
       <button value="cancel" formnovalidate>Cancel</button>
-      <button class="primary" value="send" id="plant-send">Deliver</button>
+      <button class="primary" value="plant">Deliver</button>
     </div>
   </form>
 </dialog>
@@ -195,7 +229,7 @@ function render() {
   if (!state) return;
   user = state.user;
   $("source").textContent = `You are ${state.user} · ${state.source}${state.clock ? " · " + state.clock : ""}`;
-  $("next").textContent = busy ? "Thinking…" : state.remaining ? `Next email (${state.remaining} left)` : "No more emails";
+  $("next").textContent = busy ? "Working…" : state.remaining ? `Next email (${state.remaining} left)` : "No more emails";
   $("next").disabled = busy || !state.remaining;
   $("wait").disabled = $("admin").disabled = busy;
   $("feed").innerHTML = state.messages.length ? state.messages.map(bubble).join("")
@@ -217,7 +251,17 @@ document.addEventListener("click", (event) => {
 });
 $("next").onclick = async () => { await call("/api/next", {}); window.scrollTo(0, document.body.scrollHeight); };
 $("wait").onclick = () => call("/api/wait", {days: 1});
-$("admin").onclick = () => $("plant").showModal();
+$("admin").onclick = () => {
+  const form = $("session-form"), s = state.settings, have = state.available;
+  form.source.value = s.source; form.persona.value = s.persona; form.count.value = s.count; form.llm.value = s.llm;
+  form.querySelector('[value="enron"]').disabled = !have.enron; $("opt-enron").classList.toggle("off", !have.enron);
+  form.querySelector('[value="deepseek"]').disabled = !have.deepseek; $("opt-deepseek").classList.toggle("off", !have.deepseek);
+  $("admin-panel").showModal();
+};
+document.querySelectorAll("[data-tab]").forEach((tab) => tab.onclick = () => {
+  document.querySelectorAll("[data-tab]").forEach((t) => t.classList.toggle("on", t === tab));
+  document.querySelectorAll("[data-pane]").forEach((pane) => pane.hidden = pane.dataset.pane !== tab.dataset.tab);
+});
 $("presets").innerHTML = Object.keys(PRESETS).map((name) => `<button type="button" data-preset="${name}">${name}</button>`).join("");
 $("presets").onclick = (event) => {
   const preset = PRESETS[event.target.dataset.preset];
@@ -227,12 +271,18 @@ $("presets").onclick = (event) => {
   form.subject.value = preset.subject; form.body.value = preset.body;
   form.authenticated.checked = preset.authenticated; form.newsletter.checked = !!preset.newsletter; form.from_me.checked = false;
 };
-$("plant").addEventListener("close", async () => {
-  if ($("plant").returnValue !== "send") return;
-  const form = $("plant-form");
-  await call("/api/plant", {sender: form.sender.value, subject: form.subject.value, body: form.body.value, to: form.to.value,
-    authenticated: form.authenticated.checked, newsletter: form.newsletter.checked, from_me: form.from_me.checked});
-  window.scrollTo(0, document.body.scrollHeight);
+$("admin-panel").addEventListener("close", async () => {
+  const choice = $("admin-panel").returnValue;
+  if (choice === "session") {
+    const form = $("session-form");
+    await call("/api/session", {source: form.source.value, persona: form.persona.value.trim(),
+                                count: form.count.value, llm: form.llm.value});
+  } else if (choice === "plant") {
+    const form = $("plant-form");
+    await call("/api/plant", {sender: form.sender.value, subject: form.subject.value, body: form.body.value, to: form.to.value,
+      authenticated: form.authenticated.checked, newsletter: form.newsletter.checked, from_me: form.from_me.checked});
+    window.scrollTo(0, document.body.scrollHeight);
+  }
 });
 call("/api/state");
 </script>
