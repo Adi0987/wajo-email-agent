@@ -1,8 +1,5 @@
 .env
 __pycache__/
 .venv/
-maildir/
-enron_mail_*.tar.gz
-enron-email-dataset.zip
-emails.csv
 runs/
+wajo.zip

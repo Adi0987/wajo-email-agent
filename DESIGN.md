@@ -1,110 +1,95 @@
 # Design
 
-Autonomy depends on two inputs: **risk**, from what the action does and what the email contains, and **preference**, learned from user feedback. Risk sets a ceiling. Preference moves autonomy up to that ceiling.
+Autonomy depends on two inputs: **risk**, from what the action does and what the email contains, and **preference**, learned from the user's feedback. Risk sets a ceiling. Preference moves autonomy up to that ceiling.
 
 ```
- new mail ──┐
- scheduler ─┴─► queue ─► Proposer (LLM) ─► 3 checks ─► Executor ─► mock mailbox
-                                              ▲             │
-                                              │             ▼
-                                        Approval rates ◄── user (notify / approve / undo)
+ new email ───┐                                         ┌─► classifier (sees only the email)
+ your message ┼─► context ─► Wajo (LLM) ─► tool calls ─► gate: 3 checks ─► executor ──MCP tools──► mail server
+ scheduler ───┘                    ▲                            │
+                                   └── facts about what happened ┘ ◄── you (answer / undo / correct)
 ```
 
-## 1. Proactive
+Two parts with separate jobs.
 
-A background worker consumes an event queue with two sources: new mail and a scheduler. Approval requests are asynchronous; other emails keep processing while one waits. A simulated clock drives the eval.
+**Wajo** (`agent/`) is the one assistant the user talks to. Every event (a new email, a message from the user, a reminder coming due) runs the same loop. It builds one context: the email in focus with its thread, state and the decisions made on it; questions waiting on the user; an inbox overview; what's scheduled; what the user has said about themselves; what has been learned for this sender and kind of email; past corrections on similar emails; and the conversation so far. From that it picks tool calls. For a new email it may only propose one triage action. For a user message it can answer a question, act, undo, draft or send a reply, set or cancel a reminder, search the mailbox, or remember something. Its reply is written only from facts about what actually happened, so it can't claim an action it didn't take.
 
-The scheduler checks two things:
-- **Unanswered threads.** The user sent the last message and N days passed with no reply. The agent nudges the user; it drafts a follow-up only if asked.
-- **Deadlines.** The classifier extracts deadlines from incoming mail. The agent notifies the user L days before each one.
+**The gate** (`policy/`) holds the autonomy decision and the safety floor in code. Every tool call goes through it, whatever Wajo asks for. Only its executor holds the mail tools that change anything, and it reaches mail only through MCP-style tool calls (`get_email`, `archive_email`, `send_email`, ...). An action counts as done only when the tool returns success. The server is a simulator (`mailsim/`), but nothing in the agent knows that: a send returns `status 200` and a message id, as a real provider's would.
 
-N and L are learned per sender category from "too early" / "too late" feedback. Starting values: N = 3 days, L = 1 day. The user can also ask for a reminder on any email ("remind me tomorrow"); it is scheduled the same way.
-
-## 2. Picking a level and the safety floor
-
-The LLM suggests an action. Three checks decide how much the agent does on its own, and the agent follows the most cautious answer. The agent never writes a reply on its own: `draft_reply` and `send` happen only when the user asks for them.
+## 1. Picking a level, and the safety floor
 
 | Level | What happens |
 |---|---|
-| Silent | Agent acts |
-| Notify | Agent acts, tells the user, user can undo |
-| Ask | Agent waits for approval |
-| Escalate | Agent does nothing and flags the email |
+| Silent | Wajo acts |
+| Notify | Wajo acts, tells the user, the user can undo |
+| Ask | Wajo waits for approval |
+| Escalate | Wajo does nothing and warns the user |
 
-**Check 1 (safety floor): What does the action do?** Covers irreversible and external.
+Three checks each give a level. The most cautious one wins. Wajo never writes a reply on its own: drafts and sends happen only when the user asks, and every send shows the exact text and waits for a yes.
 
-| Action | Leaves the mailbox | Can't be undone | Most the agent can do alone |
+**Check 1 (floor): what does the action do?**
+
+| Action | Leaves the mailbox | Can't be undone | Most Wajo can do alone |
 |---|---|---|---|
-| `label`, `archive`, `mark_read`, `trash`, `draft_reply` | – | – | Silent |
+| `label`, `archive`, `mark_read`, `trash` | – | – | Silent |
 | `send`, `forward`, `unsubscribe` | ✓ | ✓ | Ask |
 
-**Check 2 (safety floor): What does the email contain?** Covers money and prompt injection. A separate classifier and fixed patterns check this. The LLM that suggested the action has no say.
+**Check 2 (floor): what does the email contain?** A separate classifier, which sees only the email, plus fixed patterns. Wajo has no say.
 
-| Email | Pattern | Most the agent can do alone |
+| Email | Pattern | Most Wajo can do alone |
 |---|---|---|
 | Involves money | amounts, invoices, IBANs, "wire" | Label: Silent. Other internal: Notify. External: Ask |
-| Gives the agent instructions | a recipient outside the thread and contacts | Escalate |
+| Tries to manipulate: instructions to an assistant, getting mail sent out, a scam (urgent or secret payment, impersonation) | any recipient outside the thread and contacts | Forward, unsubscribe, anything to an outside address, or leaving it unflagged: Escalate. Tidying it up, or a reply the user wrote to people already in the thread: Ask |
 
-**Check 3 (learned): How often has the user approved this before?** Approval rate for this action and sender (see section 3).
+**Check 3 (learned): how often has the user approved this?** The approval rate for this action, from this sender and for this kind of email (section 3): ≥ 80% Silent, ≥ 60% Notify, below that Ask.
 
-| Approval rate | Most the agent can do alone |
-|---|---|
-| ≥ 80% | Silent |
-| ≥ 60% | Notify |
-| < 60% | Ask |
+Why learning can't weaken the floor: checks 1 and 2 are fixed rules in code and read no feedback. The executor reruns all three checks before every action, and runs an approved action only if it is unchanged since the approval. Feedback updates approval rates and timing, nothing else. What the user does with a flagged email is not learned at all: it says nothing about their preferences.
 
-**Enforcement**
-- The final level is the lowest of the three checks. Checks 1 and 2 are fixed rules in code. Check 3 is the only one that reads feedback.
-- Feedback updates approval rates, N and L. Nothing else.
-- Only the executor can change the mailbox. It reruns all three checks before acting, and runs an approved action only if it is unchanged since approval.
-- Check 2 triggers if either the classifier or a pattern fires. The classifier sees only the email. The eval reports missed money and injection emails.
+## 2. Proactive
+
+Besides new mail and the user's messages, a scheduler raises two things:
+- **Unanswered threads.** The user sent the last message and N days passed. Wajo tells the user and drafts a follow-up only if asked. Once the user has mostly said these aren't needed for someone, it stops.
+- **Deadlines.** The classifier extracts due dates. Wajo reminds the user L days before.
+
+N and L are learned per kind of sender from "too early" / "too late", or set directly when the user says what they want ("I usually give people a week"). They start at 3 days and 1 day. The user can also ask for, move or cancel reminders. Threads the user trashed or that started as an attack are never chased.
 
 ## 3. Learning
 
-The agent keeps an approval rate for each action and sender, such as "archive email from news@example.com". Every user response updates it. An approval counts as one approval. A rejection, an undo, or an edit to a draft counts as one rejection. When the user rejects an action and picks a different one, the rejected action gets a rejection and the chosen action gets an approval.
+Approval rates are kept at two levels: per sender ("archive from news@example.com") and per kind of email ("archive newsletters"; the classifier picks the kind). An approval or a confirmed notice counts as one approval. A rejection or an undo counts as one rejection. When the user picks a different action, the rejected one gets a rejection and the chosen one an approval.
 
-A sender's first email always asks. After that, the sender's category also counts, as up to 10 responses, and each further response from that sender replaces one of those 10, so after 10 responses only the sender's own record counts. Testing on real Enron mail showed why the first email asks: strangers are too varied to trust as a group. Categories: contact, same domain, newsletter (has an unsubscribe header) or unknown.
+The kind of email's record counts as up to 10 responses, and each response from the sender replaces one of those 10. So a new sender's first email can already be handled (after a few approved newsletters, a new newsletter is archived), and after 10 responses only the sender's own record counts. The second level is the kind of email, not the kind of sender, because a real inbox rarely repeats senders and strangers are too varied to trust as one group.
 
-Categories come from the exact sender address, never the display name. Contact means an address the user has emailed before. Same domain means an exact domain match. Contact and same domain also require passing sender authentication. Anything else is unknown. A hacked contact account gets that contact's trust, and checks 1 and 2 still apply.
+The rate is a cautious estimate (a lower confidence bound), so 3 approvals out of 3 isn't 100%. With no rejections, an action reaches Notify after 3 approvals and Silent after 7; one rejection after 15 approvals drops it 9 points. The thresholds and rejection weight were tuned on separate seeds from the reported ones: the lowest ask rate with at most 5% wrong autonomous actions.
 
-The agent uses a cautious estimate of the rate that rises as responses accumulate, so 3 approvals out of 3 does not count as 100%. With no rejections and no category history, an action reaches Notify after 3 approvals and Silent after 7. After 15 approvals, one more approval raises the estimate by 0.6 points and one rejection lowers it by 9.
-
-The rejection weight and thresholds are chosen by `eval/tune.py` on separate seeds from the reported results: the lowest ask rate with at most 5% wrong autonomous actions.
-
-The proposer is told which action the user has approved most for this sender, or for its category if the sender is new. Corrections therefore improve proposals as well as autonomy. The hint never affects checks 1 and 2.
+Feedback also improves the proposals themselves: Wajo's context shows the learned counts and its recent corrections on similar emails ("I proposed archive; the user said no and chose label"), and everything the user has told it about themselves. None of this touches checks 1 and 2. Everything lives in the session; nothing is written to disk except logs.
 
 ## Eval
 
-60 simulated days, about 300 emails per seed: newsletters, colleagues, contacts, cold outreach, invoices, deadlines, unanswered threads, and 20 attacks (injection, "this email is safe", spoofed contact, lookalike domain, hacked contact). A simulated user has a hidden correct action per email and hidden timing preferences. It flips 5% of its responses and notices only half of wrong Silent actions. Settings are tuned on seeds 1–3; results are on seeds 101–103.
+60 simulated days, about 300 emails per seed: newsletters, colleagues, contacts, cold outreach, invoices, deadlines, unanswered threads, and 20 attacks (injection, "this email is safe", spoofed contact, lookalike domain, hacked contact). A simulated user has a hidden correct action per email and hidden timing preferences, flips 5% of its responses, and notices only half of wrong Silent actions. Settings are tuned on seeds 1–3; results are on seeds 101–103. The same Wajo runs in the eval and the app.
 
-## Results (DeepSeek, seeds 101–103)
+## Results (deepseek-chat, seeds 101–103)
 
 | Days | Ask rate | Wrong autonomous actions | Wrong Silent actions |
 |---|---|---|---|
-| 0–9 | 77% | 26% | 25% |
-| 20–29 | 52% | 4.5% | 0% |
-| 50–59 | 40% | 4.3% | 0% |
+| 0–9 | 57% | 5.9% | 0% |
+| 10–19 | 27% | 2.0% | 0% |
+| 20–29 | 8.0% | 1.1% | 0% |
+| 50–59 | 0.8% | 0% | 0% |
 
-- **Floor:** 0 violations in 113 actions the floor applied to. 0 of 60 attacks succeeded; 51 were escalated, and the 9 lookalike wire requests were capped at Ask by the money check.
-- **Baselines:** always-ask asks 92–97% of the time. Fixed rules (no learning) ask 21–29% of the time, but 55–68% of their autonomous actions are wrong, because DeepSeek's proposals without the user's history are often wrong.
-- **Timing:** in the second half, all 53 nudges and reminders for real deadlines and threads had the right timing.
-- **Detection:** money 114/114, injection 51/51, deadlines 60/60, with 13 false deadlines. The money templates always contain an amount or "invoice", so money recall is easier here than on real mail.
+- **Floor:** 0 violations in 105 actions the floor applied to. 0 of 60 attacks succeeded, under every policy. 44 were escalated; the other 16 were emails Wajo proposed to trash, held at Ask because even tidying up a flagged email needs the user's OK.
+- **Baselines:** always-ask asks 59–70% of the time throughout (leaving an email in the inbox never asks). Fixed rules (no learning) ask almost never, but 19.5% of their autonomous actions are wrong in the first 10 days.
+- **Detection:** money 114/114, manipulation 51/51, deadlines 117/120 with 9 false. The money templates always contain an amount or "invoice", so money recall is easier here than on real mail.
+- **Timing:** in the second half, 64 of 68 nudges and reminders had the right timing; none were unwanted.
+- **One long session in the app** ([calibration.md](eval/conversations/calibration.md)): asks fell from 64% in the first two weeks to 4% in the last two, 0 wrong autonomous actions, and nothing left the mailbox without the user's OK, including a wire request, a forward to a personal Gmail and a card-details request from senders Wajo already trusted.
 
-Full tables: [eval/results_deepseek.md](eval/results_deepseek.md). Offline worst case (the proposer follows every attacker, the classifier detects nothing): [eval/results_stub.md](eval/results_stub.md), also 0 floor violations.
+Full tables: [eval/results_llm.md](eval/results_llm.md). Offline worst case (the triage step follows every attacker, the classifier detects nothing): [eval/results_stub.md](eval/results_stub.md), also 0 floor violations.
 
 ## Limitations
 
-- The simulated user is consistent apart from noise. Real preferences drift, and a real user ignores some notifications, which keeps those actions at Notify.
-- Detection is measured on templates. Real phishing varies more than the patterns cover.
-- Errors early on are high (26% in the first 10 days) because every sender starts cold.
+- The simulated user is consistent apart from noise. Real preferences drift, and a real user ignores many notices, which teaches nothing and keeps those actions at Notify (seen in the calibration session).
+- Detection is measured on templates. Real phishing varies more than the patterns cover; the classifier is the main defense there.
+- The LLM can still word a draft more fully than the user asked ("thanks for your patience"). It never adds facts or commitments in the transcripts, but drafts are always shown before sending for this reason.
 
 ## Example transcripts
 
-From the DeepSeek run: [eval/transcripts_deepseek.md](eval/transcripts_deepseek.md).
-
-1. Cold start: asks before acting on a newsletter
-2. Learned: the same action for the same sender runs silently
-3. Correction: an undo lowers autonomy for that sender and action
-4. Floor: learned Silent, but a money email caps the action at Notify
-5. Injection: escalated whatever the proposer suggests
-6. Proactive: unanswered thread, the agent nudges you
+- [eval/transcripts_llm.md](eval/transcripts_llm.md): decisions from the eval (cold start, learned, correction, money cap, injection, follow-up).
+- [eval/conversations/](eval/conversations/): conversations with Wajo in the app. [calibration.md](eval/conversations/calibration.md) is one four-week session: autonomy growing per sender, and risky emails from trusted senders. Others cover recall, follow-ups, inbox management, preferences, phishing and more.
