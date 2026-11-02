@@ -1,7 +1,7 @@
 import unittest
 
-from agent.models import Level
-from agent.rates import ApprovalRates
+from policy.models import Level
+from policy.rates import ApprovalRates
 
 
 def approve(rates, n, sender="a@news.com", kind="archive"):
@@ -28,10 +28,10 @@ class TestRates(unittest.TestCase):
         rates.record("archive", "a@news.com", "newsletter", approved=False)
         self.assertEqual(rates.level("archive", "a@news.com", "newsletter"), Level.NOTIFY)
 
-    def test_first_email_from_new_sender_asks(self):
+    def test_new_sender_borrows_the_kind_of_email_from_the_first_email(self):
         rates = ApprovalRates()
         approve(rates, 15)
-        self.assertEqual(rates.level("archive", "b@news.com", "newsletter"), Level.ASK)
+        self.assertEqual(rates.level("archive", "b@news.com", "newsletter"), Level.SILENT)
 
     def test_new_sender_borrows_category_after_one_response(self):
         rates = ApprovalRates()

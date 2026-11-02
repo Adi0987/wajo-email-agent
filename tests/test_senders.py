@@ -1,6 +1,6 @@
 import unittest
 
-from agent.senders import sender_category
+from policy.senders import sender_category
 from tests.helpers import USER, make_email, make_mailbox
 
 
@@ -16,7 +16,7 @@ class TestSenders(unittest.TestCase):
         self.assertEqual(self.category(sender="friend@gmail.com"), "contact")
 
     def test_same_domain(self):
-        self.assertEqual(self.category(sender="boss@wajo.ai"), "same_domain")
+        self.assertEqual(self.category(sender="boss@example.com"), "same_domain")
 
     def test_newsletter(self):
         self.assertEqual(self.category(sender="news@shop.com", has_unsubscribe=True), "newsletter")
@@ -25,5 +25,5 @@ class TestSenders(unittest.TestCase):
         self.assertEqual(self.category(sender="friend@gmail.com", authenticated=False), "unknown")
 
     def test_lookalike_domains_are_unknown(self):
-        self.assertEqual(self.category(sender="boss@wajo-ai.com"), "unknown")
-        self.assertEqual(self.category(sender="boss@wаjo.ai"), "unknown")  # Cyrillic а
+        self.assertEqual(self.category(sender="boss@examp1e.com"), "unknown")
+        self.assertEqual(self.category(sender="boss@exаmple.com"), "unknown")  # Cyrillic а

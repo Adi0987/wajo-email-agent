@@ -1,7 +1,7 @@
 import unittest
 
-from agent.flags import detect_flags
-from agent.models import Action
+from policy.flags import detect_flags
+from policy.models import Action
 from tests.helpers import make_email, make_mailbox
 
 

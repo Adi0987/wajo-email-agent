@@ -1,13 +1,15 @@
 import unittest
 
-from agent.checks import ACTIONS, action_check, email_check
-from agent.models import Flags, Level
+from policy.checks import ACTIONS, action_check, email_check
+from policy.models import Flags, Level
 
 NO_FLAGS = Flags()
 
 
 def final_level(kind, flags, learned):
     return min(action_check(kind), email_check(kind, flags), learned)
+
+
 EXTERNAL = ["send", "forward", "unsubscribe"]
 INTERNAL = [kind for kind in ACTIONS if kind not in EXTERNAL]
 
@@ -27,9 +29,11 @@ class TestChecks(unittest.TestCase):
         self.assertEqual(final_level("archive", money, Level.SILENT), Level.NOTIFY)
         self.assertEqual(final_level("send", money, Level.SILENT), Level.ASK)
 
-    def test_injection_escalates_every_action(self):
+    def test_injection_escalates_outward_actions_and_asks_for_the_rest(self):
         for kind in ACTIONS:
-            self.assertEqual(final_level(kind, Flags(injection=True), Level.SILENT), Level.ESCALATE)
+            expected = Level.ESCALATE if kind in ("forward", "unsubscribe", "keep") else Level.ASK
+            self.assertEqual(final_level(kind, Flags(injection=True), Level.SILENT), expected)
+        self.assertEqual(final_level("send", Flags(injection=True, outside=True), Level.SILENT), Level.ESCALATE)
 
     def test_learning_can_only_lower(self):
         self.assertEqual(final_level("archive", NO_FLAGS, Level.ASK), Level.ASK)
