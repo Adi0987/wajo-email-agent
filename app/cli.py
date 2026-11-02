@@ -3,6 +3,7 @@ import textwrap
 from collections import deque
 
 from agent.audit import AuditLog
+from app import session_log
 from app.assistant import Assistant
 from app.feed import build, defaults
 from app.style import BLUE, BOLD, CYAN, DIM, GREEN, RED, YELLOW, paint
@@ -37,6 +38,7 @@ def run(settings: dict, details: bool) -> None:
     s = {**defaults(), **settings}
     session = build(s["source"], s["persona"], s["count"], s["llm"])
     assistant = Assistant(session.agent, session.llm, session.profile, AuditLog())
+    folder = session_log.new_folder()
     print(paint("\nHi, I'm Wajo, your email assistant. ", BOLD) + f"Here come {session.description}. "
           "Reply in your own words, like \"yes\", \"archive it instead\" or \"label it research\". Enter means yes.")
     for number, email in enumerate(session.feed, 1):
@@ -47,10 +49,12 @@ def run(settings: dict, details: bool) -> None:
             show(message, details)
             if message["open"]:
                 queue.extend(assistant.answer(message["id"], input(paint("  you › ", BOLD))))
+        session_log.write(folder, assistant, session.description)
         command = input(paint("\n  [enter] next email · q quit · or tell me something about how you work ", DIM)).strip()
         if command.lower() == "q":
             break
         if command:
             for message in assistant.tell(command):
                 show(message, details)
-    print("\n" + paint("Session summary", BOLD) + "\n" + assistant.audit.summary())
+    session_log.write(folder, assistant, session.description)
+    print("\n" + paint("Session summary", BOLD) + "\n" + assistant.audit.summary() + f"\nLogs: {folder}/")

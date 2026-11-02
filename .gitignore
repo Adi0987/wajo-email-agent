@@ -5,3 +5,4 @@ maildir/
 enron_mail_*.tar.gz
 enron-email-dataset.zip
 emails.csv
+runs/

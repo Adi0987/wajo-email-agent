@@ -13,7 +13,7 @@ from agent.llm import LLM
 from agent.models import Action, Email, Level
 from agent.notices import Notice
 from agent.profile import Profile
-from agent.rates import NOTIFY_AT, SILENT_AT
+from agent.rates import NOTIFY_AT, SILENT_AT, cautious_rate
 from agent.senders import other_party
 from app.interpreter import Interpreter
 from app.narrator import Narrator, describe
@@ -61,6 +61,8 @@ class Assistant:
 
     def answer(self, message_id: int, reply: str) -> list[dict]:
         """The user's reply to an open message, in their own words."""
+        if message_id not in self._open:
+            return [self.note("That one has already been answered.")]
         notice = self._open.pop(message_id)
         message = next(m for m in self.messages if m["id"] == message_id)
         message["open"], message["answer"] = False, reply or "yes"
@@ -115,6 +117,41 @@ class Assistant:
 
     def note(self, text: str) -> dict:
         return self._add("note", text=text)
+
+    # --- what the agent has learned and scheduled (for Diagnostics and the session log) ---
+
+    def learned(self) -> dict:
+        """What the agent has learned from feedback: per sender, and per kind of sender."""
+        agent = self.agent
+        mailbox, rates = agent.mailbox, agent.rates
+        category = {}
+        for email in mailbox.emails.values():
+            address, kind_of_sender = other_party(email, mailbox)
+            category[address] = kind_of_sender
+        senders = [{"who": sender, "action": kind, "approved": int(a), "rejected": int(r),
+                    "level": rates.level(kind, sender, category.get(sender, "unknown")).name.title()}
+                   for (kind, sender), (a, r) in rates.by_sender.items() if a or r]
+        groups = [{"who": CATEGORY_WORDS.get(group, group), "action": kind, "approved": int(a), "rejected": int(r),
+                   "rate": f"{cautious_rate(a, r):.0%}"}
+                  for (kind, group), (a, r) in rates.by_category.items() if a or r]
+        return {"senders": senders, "groups": groups}
+
+    def timing(self) -> list[dict]:
+        timing = self.agent.timing
+        groups = sorted(set(timing.n) | set(timing.l))
+        return [{"who": CATEGORY_WORDS.get(g, g), "follow_up": f"{timing.n[g]:.1f} days",
+                 "reminder": f"{timing.l[g]:.1f} days before"} for g in groups]
+
+    def scheduled(self) -> list[dict]:
+        items = []
+        for item in self.agent.scheduler.pending():
+            email = item["email"]
+            if item["kind"] == "follow_up":
+                what = f"Follow up with {email.to[0]} on \"{email.subject}\" if no reply"
+            else:
+                what = f"Remind you about \"{email.subject}\" (due {item['deadline']:%b %d})"
+            items.append({"what": what, "at": f"{item['at']:%a %b %d %H:%M}"})
+        return items
 
     # --- turning agent output into messages ---
 

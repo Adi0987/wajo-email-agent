@@ -20,7 +20,7 @@ The sidebar shows your inbox in sections and, under **Diagnostics**, what you've
 
 The Enron option needs `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder; DeepSeek needs `LLM_API_KEY=...` in `.env`. Without them, the synthetic inbox and the offline stand-in work with nothing to set up. `python3 wajo.py try` is the same assistant in the terminal.
 
-A session is its own sandbox: the emails, what the agent learns, what you tell it about yourself and the audit log live in memory only and disappear when the app stops. Nothing is written to disk. Diagnostics has a **Download the audit log** link (every decision, each check's result and your response) for when you want to keep one.
+A session is its own sandbox: the emails, what the agent learns and what you tell it about yourself live in memory only and disappear when the app stops. The only thing written to disk is the session's logs, for auditing: `runs/<time>/decisions.csv` (every decision, each check's result, your response) and `runs/<time>/conversation.md` (the whole conversation, plus what the agent knew, had learned and had scheduled). Both are rewritten after every step.
 
 ## Evaluate it
 

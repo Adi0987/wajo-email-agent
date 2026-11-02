@@ -263,8 +263,8 @@ function diagnostics() {
       [["who", "Kind"], ["follow_up", "Follow up after"], ["reminder", "Remind"]])}</div>
     <div class="section"><h4>Scheduled</h4>${table(state.scheduled, [["at", "When"], ["what", "What"]])}</div>
     <div class="section"><h4>Session</h4><p class="meta">Acting as ${esc(state.user)}. ${esc(state.source)}.</p>
-      <p class="meta">Everything in this session (emails, what I've learned, what you've told me, the audit log)
-        lives in memory only and disappears when the app stops. Nothing is written to disk.</p>
+      <p class="meta">Everything in this session (emails, what I've learned, what you've told me) lives in memory only
+        and disappears when the app stops. Only the logs are written to disk, in ${esc(state.log)}/.</p>
       <p class="meta"><a href="/api/audit.csv">Download the audit log</a> (every decision, each check's result, your response).</p></div>`;
 }
 
