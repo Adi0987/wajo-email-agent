@@ -45,7 +45,7 @@ def parse(raw: bytes, email_id: str) -> Optional[Email]:
         return None
     body = message.get_payload(decode=True) or b""
     return Email(id=email_id, thread_id=email_id, sender=senders[0][1].lower(), to=recipients,
-                 subject=str(message.get("Subject", "")), body=body.decode("latin-1").strip(),
+                 subject=" ".join(str(message.get("Subject", "")).split()), body=body.decode("latin-1").strip(),
                  sent_at=sent_at, has_unsubscribe="List-Unsubscribe" in message)
 
 

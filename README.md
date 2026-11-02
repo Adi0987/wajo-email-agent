@@ -10,7 +10,7 @@ Python 3.9+, standard library only. Design decisions: [DESIGN.md](DESIGN.md).
 python3 wajo.py try
 ```
 
-You are the user. Emails arrive one at a time; for each one the agent says what it wants to do, which level it chose (Silent, Notify, Ask, Escalate) and why. You approve, reject, or undo, and it learns. A summary prints at the end, and every decision is saved to `runs/audit_<time>.csv`.
+You are the user. Emails arrive one at a time, and the agent talks to you like an assistant: what the email is, what it wants to do and why, and why it's asking (or that it went ahead). You approve, reject, undo, or tell it what you'd rather do, and it learns. `--details` also shows each safety check's result. A summary prints at the end, and every decision is saved to `runs/audit_<time>.csv`.
 
 - With `enron-email-dataset.zip` ([Kaggle](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)) in this folder, a random sample of a real Enron inbox arrives one email at a time, different each run (`--persona kaminski-v`, `--count 20`). This uses DeepSeek: put `LLM_API_KEY=...` in `.env`.
 - Without it, or with `--offline`, emails come from the synthetic inbox and no API key is needed.

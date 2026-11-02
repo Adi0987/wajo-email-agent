@@ -18,6 +18,7 @@ def main() -> None:
     try_cmd.add_argument("--persona", default="kaminski-v", help="Enron mailbox to use (default kaminski-v)")
     try_cmd.add_argument("--count", type=int, default=20, help="number of emails (default 20)")
     try_cmd.add_argument("--offline", action="store_true", help="synthetic inbox, no API key needed")
+    try_cmd.add_argument("--details", action="store_true", help="also show each safety check's result")
 
     for name, text in (("eval", "run the evaluation"), ("tune", "re-pick learning thresholds")):
         cmd = commands.add_parser(name, help=text)
@@ -28,7 +29,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "try":
         from eval.interactive import try_agent
-        try_agent(args.persona, args.count, args.offline)
+        try_agent(args.persona, args.count, args.offline, args.details)
     elif args.command == "eval":
         from eval.run import run_eval
         from eval.transcripts import write_transcripts
